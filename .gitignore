@@ -1,2 +1,3 @@
 venv/
 battlemap_test.png
+*.pyc
