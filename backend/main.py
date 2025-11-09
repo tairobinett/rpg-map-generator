@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import terrain_generator as tg
 from fastapi.responses import StreamingResponse
 from io import BytesIO
+from pydantic import BaseModel
 
 
 app = FastAPI()
@@ -16,14 +17,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class seed_request(BaseModel): 
+    seed:int
+
 @app.get("/hello")
 def hello_world():
     return {"message": "Hello World!"}
-
+ 
 @app.post("/generate_map")
-def generate_map(seed):
+def generate_map(request:seed_request):
     try:
-        input_seed_int = int(seed)
+        input_seed_int = int(request.seed)
         # print(f"input_seed_int value: {input_seed_int}")
     except ValueError:
         print("Invalid input.")
