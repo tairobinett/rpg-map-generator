@@ -7,6 +7,7 @@ function App() {
   const [count, setCount] = useState(0)
   const [message, setMessage] = useState("test")
   const [imageURL, setImageURL] = useState("")
+  const [seed, setSeed] = useState("")
 
   const handleClick = async () => {
     try{
@@ -21,13 +22,14 @@ function App() {
 
   const generateImage = async () => {
     try{
+      console.log(seed)
       const response = await fetch('http://127.0.0.1:8000/generate_map', {
         method:"POST",
         headers:{
           "Content-Type":"application/json"
         },
         body:JSON.stringify({
-          seed:"1"
+          seed:seed
         }),
       });
       const blob = await response.blob();
@@ -51,6 +53,13 @@ function App() {
       </div>
       <h1>Vite + React</h1>
       <div className="card">
+        <label>
+          Enter seed: <input 
+            name="seedInput" 
+            value={seed}
+            onChange={e => setSeed(e.target.value)}
+          />
+        </label>
         <button onClick={() => generateImage()}>
           count is {count}
         </button>
