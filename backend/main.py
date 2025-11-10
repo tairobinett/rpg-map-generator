@@ -19,6 +19,8 @@ app.add_middleware(
 
 class seed_request(BaseModel): 
     seed:int
+    height:int
+    width:int
 
 @app.get("/hello")
 def hello_world():
@@ -28,12 +30,14 @@ def hello_world():
 def generate_map(request:seed_request):
     try:
         input_seed_int = int(request.seed)
+        input_height_int = int(request.height)
+        input_width_int = int(request.width)
         # print(f"input_seed_int value: {input_seed_int}")
     except ValueError:
         print("Invalid input.")
         exit()
 
-    generator = tg.TerrainGenerator(width=30, height=30, seed=input_seed_int, tile_size=128)
+    generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128)
     
     print("Generating terrain...")
     generator.generate_terrain(scale=0.1, octaves=4)

@@ -8,6 +8,8 @@ function App() {
   const [message, setMessage] = useState("test")
   const [imageURL, setImageURL] = useState("")
   const [seed, setSeed] = useState("")
+  const [height, setHeight] = useState("30")
+  const [width, setWidth] = useState("30")
 
   const handleClick = async () => {
     try{
@@ -29,7 +31,9 @@ function App() {
           "Content-Type":"application/json"
         },
         body:JSON.stringify({
-          seed:seed
+          seed:seed,
+          height:height,
+          width:width
         }),
       });
       const blob = await response.blob();
@@ -53,11 +57,30 @@ function App() {
             onChange={e => setSeed(e.target.value)}
           />
         </label>
+      </div>
+      <div>
+        <label>
+          Enter map height: <input 
+            name="seedInput" 
+            value={height}
+            onChange={e => setHeight(e.target.value)}
+          />
+        </label>
+      </div>
+      <div>
+        <label>
+          Enter map width: <input 
+            name="seedInput" 
+            value={width}
+            onChange={e => setWidth(e.target.value)}
+          />
+        </label>
+      </div>
+      <div>
         <button onClick={() => generateImage()}>
           Generate map
         </button>
       </div>
-
       <div className="card">
         {
           imageURL && <img src={imageURL} alt="Terrain map" style={{ maxWidth: '800px', width: '100%', height: 'auto', marginTop: '1rem' }} />
