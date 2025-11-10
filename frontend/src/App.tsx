@@ -43,16 +43,9 @@ function App() {
 
   return (
     <>
+      <h1>RPG Map Generator</h1>
+
       <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
         <label>
           Enter seed: <input 
             name="seedInput" 
@@ -61,19 +54,16 @@ function App() {
           />
         </label>
         <button onClick={() => generateImage()}>
-          count is {count}
+          Generate map
         </button>
+      </div>
+
+      <div className="card">
         {
-          imageURL && <img src={imageURL} alt="Terrain map" />
+          imageURL && <img src={imageURL} alt="Terrain map" style={{ maxWidth: '800px', width: '100%', height: 'auto', marginTop: '1rem' }} />
           
         }
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
     </>
   )
 }
