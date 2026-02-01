@@ -96,7 +96,7 @@ def generate_map_river(request:seed_request):
     generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128)
     
     print("Generating terrain...")
-    generator.generate_terrain_river(scale=0.1, octaves=4)
+    generator.generate_terrain_river(river_width=2, scale=0.1, octaves=4)
     
     print("Rendering image...")
     image = generator.render_to_image(show_grid=True)

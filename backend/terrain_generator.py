@@ -2,6 +2,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 from opensimplex import OpenSimplex
 import random
+import math
 
 
 class TerrainType:
@@ -135,7 +136,8 @@ class TerrainGenerator:
         
         return self.terrain_grid
 
-    def generate_river(self):
+    def generate_river(self, river_width):
+
         choose_start_wall = random.randint(0,3) # 0=left, 1=top, 2=right, 3=bottom
         choose_end_wall = choose_start_wall
         while choose_end_wall == choose_start_wall:
@@ -276,9 +278,28 @@ class TerrainGenerator:
         if(current_pos not in tiles and current_pos[0] >= 0 and current_pos[0] < self.width and current_pos[1] >= 0 and current_pos[1] < self.height):
             tiles.add(current_pos)
 
+        tiles_to_add = set()
+        for tile in list(tiles):
+            for t in self.get_tiles_in_radius(tile, river_width):
+                tiles_to_add.add(t)
+        print(tiles)
+        print(tiles_to_add)
+        tiles = tiles.union(tiles_to_add)
+
         return tiles
     
-    def generate_terrain_river(self, scale=0.1, octaves=4):
+    def distance(self, p1, p2):
+        return math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)
+
+    def get_tiles_in_radius(self, target, r):
+        tiles = set()
+        for y in range(target[1] - int(r), target[1] + int(r) + 1):
+            for x in range(target[0] - int(r), target[0] + int(r) + 1):
+                if not (x < 0 or x >= self.width or y < 0 or y >= self.height or self.distance((x,y), (target[0],target[1])) > r):
+                    tiles.add((x, y))
+        return tiles
+    
+    def generate_terrain_river(self, river_width, scale=0.1, octaves=4,):
         # Generate multi-octave noise
         noise_map = np.zeros((self.height, self.width))
         
@@ -300,7 +321,7 @@ class TerrainGenerator:
         # Convert noise values to terrain types using thresholds
         self.terrain_grid.fill(TerrainType.GRASS)
 
-        river_tiles = self.generate_river()
+        river_tiles = self.generate_river(river_width)
         
         for tile in list(river_tiles):
             self.terrain_grid[tile[0], tile[1]] = TerrainType.WATER
