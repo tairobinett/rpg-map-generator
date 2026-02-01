@@ -110,3 +110,199 @@ class TerrainGenerator:
         for y in range(0, img_height + 1, self.tile_size):
             draw.line([(0, y), (img_width, y)], fill=grid_color, width=1)
 
+
+    def generate_terrain_grass(self, scale=0.1, octaves=4):
+        # Generate multi-octave noise
+        noise_map = np.zeros((self.height, self.width))
+        
+        for octave in range(octaves):
+            frequency = 2 ** octave
+            amplitude = 1 / (2 ** octave)
+            
+            for y in range(self.height):
+                for x in range(self.width):
+                    noise_val = self.noise.noise2(
+                        x * scale * frequency,
+                        y * scale * frequency
+                    )
+                    noise_map[y, x] += noise_val * amplitude
+        
+        # Normalize to 0-1 range
+        noise_map = (noise_map - noise_map.min()) / (noise_map.max() - noise_map.min())
+        
+        # Convert noise values to terrain types using thresholds
+        self.terrain_grid.fill(TerrainType.GRASS)
+        
+        return self.terrain_grid
+
+    def generate_river(self):
+        choose_start_wall = random.randint(0,3) # 0=left, 1=top, 2=right, 3=bottom
+        choose_end_wall = choose_start_wall
+        while choose_end_wall == choose_start_wall:
+            choose_end_wall = random.randint(0,3)
+
+        river_start = (0,0)
+        river_end = (0,0)
+        mid_point = (random.randint(1,self.width-1), random.randint(1,self.height-1)) # Random point in interior
+        target_weight = 0.75
+        
+        # Choose starting and ending points
+        if choose_start_wall == 0:
+            river_start = (0, random.randint(1, self.height-1))
+        elif choose_start_wall == 1:
+            river_start = (random.randint(1, self.width-1), 0)
+        elif choose_start_wall == 2:
+            river_start = (self.width-1, random.randint(1, self.height-1))
+        else:
+            river_start = (random.randint(1, self.width-1), self.height-1)
+
+        if choose_end_wall == 0:
+            river_end = (0, random.randint(1, self.height-1))
+        elif choose_end_wall == 1:
+            river_end = (0, random.randint(1, self.width-1))
+        elif choose_end_wall == 2:
+            river_end = (self.width-1, random.randint(1, self.height-1))
+        else:
+            river_end = (random.randint(1, self.width-1), self.height-1)
+        
+        tiles = set()
+        counter = 0
+        iteration_limit = 1000
+        current_pos = river_start
+
+        # River start to midpoint
+        if(current_pos not in tiles and current_pos[0] >= 0 and current_pos[0] < self.width and current_pos[1] >= 0 and current_pos[1] < self.height):
+            tiles.add(current_pos)
+        while(not (current_pos[0] is mid_point[0] and current_pos[1] is mid_point[1]) and counter < iteration_limit):
+            counter += 1
+            if(current_pos not in tiles and current_pos[0] >= 0 and current_pos[0] < self.width and current_pos[1] >= 0 and current_pos[1] < self.height):
+                tiles.add(current_pos)
+            if(random.uniform(0, 1) < target_weight):
+                if current_pos[0] < mid_point[0] and current_pos[1] < mid_point[1]:
+                    if(random.uniform(0, 1) < 0.5):
+                        current_pos = (current_pos[0]+1, current_pos[1])
+                    else:
+                        current_pos = (current_pos[0], current_pos[1]+1)
+                elif current_pos[0] < mid_point[0] and current_pos[1] > mid_point[1]:
+                    if(random.uniform(0, 1) < 0.5):
+                        current_pos = (current_pos[0]+1, current_pos[1])
+                    else:
+                        current_pos = (current_pos[0], current_pos[1]-1)
+                elif current_pos[0] > mid_point[0] and current_pos[1] < mid_point[1]:
+                    if(random.uniform(0, 1) < 0.5):
+                        current_pos = (current_pos[0]-1, current_pos[1])
+                    else:
+                        current_pos = (current_pos[0], current_pos[1]+1)
+                elif current_pos[0] > mid_point[0] and current_pos[1] > mid_point[1]:
+                    if(random.uniform(0, 1) < 0.5):
+                        current_pos = (current_pos[0]-1, current_pos[1])
+                    else:
+                        current_pos = (current_pos[0], current_pos[1]-1)
+                elif current_pos[0] < mid_point[0]:
+                    current_pos = (current_pos[0]+1, current_pos[1]) # right
+                elif current_pos[1] < mid_point[1]:
+                    current_pos = (current_pos[0], current_pos[1]+1) # down
+                elif current_pos[0] > mid_point[0]:
+                    current_pos = (current_pos[0]-1, current_pos[1]) # left
+                elif current_pos[1] > mid_point[1]:
+                    current_pos = (current_pos[0], current_pos[1]-1) # up
+            else:
+                dir = random.randint(0, 3)
+                if dir == 0:
+                    if current_pos[0] - 1 > 0:
+                        current_pos = (current_pos[0] - 1, current_pos[1])
+                elif dir == 1:
+                    if current_pos[1] - 1 > 0:
+                        current_pos = (current_pos[0], current_pos[1] - 1)
+                elif dir == 2:
+                    if current_pos[0] + 1 < self.width - 1:
+                        current_pos = (current_pos[0] + 1, current_pos[1])
+                else:
+                    if current_pos[1] - 1 < self.height - 1:
+                        current_pos = (current_pos[0], current_pos[1] + 1)
+        
+        counter = 0
+        # River midpoint to end
+        while(current_pos[0] > 0 and current_pos[0] < self.width and current_pos[1] > 0 and current_pos[1] < self.height and 
+                not (current_pos[0] is river_end[0] and current_pos[1] is river_end[1]) and counter < iteration_limit):
+            counter += 1
+            if(current_pos not in tiles and current_pos[0] >= 0 and current_pos[0] < self.width and current_pos[1] >= 0 and current_pos[1] < self.height):
+                tiles.add(current_pos)
+            if(random.uniform(0, 1) < target_weight):
+                if current_pos[0] < river_end[0] and current_pos[1] < river_end[1]:
+                    if(random.uniform(0, 1) < 0.5):
+                        current_pos = (current_pos[0]+1, current_pos[1])
+                    else:
+                        current_pos = (current_pos[0], current_pos[1]+1)
+                elif current_pos[0] < river_end[0] and current_pos[1] > river_end[1]:
+                    if(random.uniform(0, 1) < 0.5):
+                        current_pos = (current_pos[0]+1, current_pos[1])
+                    else:
+                        current_pos = (current_pos[0], current_pos[1]-1)
+                elif current_pos[0] > river_end[0] and current_pos[1] < river_end[1]:
+                    if(random.uniform(0, 1) < 0.5):
+                        current_pos = (current_pos[0]-1, current_pos[1])
+                    else:
+                        current_pos = (current_pos[0], current_pos[1]+1)
+                elif current_pos[0] > river_end[0] and current_pos[1] > river_end[1]:
+                    if(random.uniform(0, 1) < 0.5):
+                        current_pos = (current_pos[0]-1, current_pos[1])
+                    else:
+                        current_pos = (current_pos[0], current_pos[1]-1)
+                elif current_pos[0] < river_end[0]:
+                    current_pos = (current_pos[0]+1, current_pos[1]) # right
+                elif current_pos[1] < river_end[1]:
+                    current_pos = (current_pos[0], current_pos[1]+1) # down
+                elif current_pos[0] > river_end[0]:
+                    current_pos = (current_pos[0]-1, current_pos[1]) # left
+                elif current_pos[1] > river_end[1]:
+                    current_pos = (current_pos[0], current_pos[1]-1) # up
+            else:
+                dir = random.randint(0, 3)
+                if dir == 0:
+                    if current_pos[0] - 1 > 0:
+                        current_pos = (current_pos[0] - 1, current_pos[1])
+                elif dir == 1:
+                    if current_pos[1] - 1 > 0:
+                        current_pos = (current_pos[0], current_pos[1] - 1)
+                elif dir == 2:
+                    if current_pos[0] + 1 < self.width - 1:
+                        current_pos = (current_pos[0] + 1, current_pos[1])
+                else:
+                    if current_pos[1] - 1 < self.height - 1:
+                        current_pos = (current_pos[0], current_pos[1] + 1)
+
+        # Fill in final river tile
+        if(current_pos not in tiles and current_pos[0] >= 0 and current_pos[0] < self.width and current_pos[1] >= 0 and current_pos[1] < self.height):
+            tiles.add(current_pos)
+
+        return tiles
+    
+    def generate_terrain_river(self, scale=0.1, octaves=4):
+        # Generate multi-octave noise
+        noise_map = np.zeros((self.height, self.width))
+        
+        for octave in range(octaves):
+            frequency = 2 ** octave
+            amplitude = 1 / (2 ** octave)
+            
+            for y in range(self.height):
+                for x in range(self.width):
+                    noise_val = self.noise.noise2(
+                        x * scale * frequency,
+                        y * scale * frequency
+                    )
+                    noise_map[y, x] += noise_val * amplitude
+        
+        # Normalize to 0-1 range
+        noise_map = (noise_map - noise_map.min()) / (noise_map.max() - noise_map.min())
+        
+        # Convert noise values to terrain types using thresholds
+        self.terrain_grid.fill(TerrainType.GRASS)
+
+        river_tiles = self.generate_river()
+        
+        for tile in list(river_tiles):
+            self.terrain_grid[tile[0], tile[1]] = TerrainType.WATER
+
+        return self.terrain_grid

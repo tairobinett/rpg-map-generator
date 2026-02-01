@@ -53,3 +53,59 @@ def generate_map(request:seed_request):
     # output_file = "battlemap_test.png"
     # image.save(output_file)
     # print(f"Map saved to {output_file}")
+
+@app.post("/generate_map_grass")
+def generate_map_grass(request:seed_request):
+    try:
+        input_seed_int = int(request.seed)
+        input_height_int = int(request.height)
+        input_width_int = int(request.width)
+        # print(f"input_seed_int value: {input_seed_int}")
+    except ValueError:
+        print("Invalid input.")
+        exit()
+
+    generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128)
+    
+    print("Generating terrain...")
+    generator.generate_terrain_grass(scale=0.1, octaves=4)
+    
+    print("Rendering image...")
+    image = generator.render_to_image(show_grid=True)
+
+    image_byte_array = BytesIO()
+    image.save(image_byte_array, format="PNG")
+    image_byte_array.seek(0)
+    return StreamingResponse(image_byte_array, media_type="image/png")
+    
+    # output_file = "battlemap_test.png"
+    # image.save(output_file)
+    # print(f"Map saved to {output_file}")
+
+@app.post("/generate_map_river")
+def generate_map_river(request:seed_request):
+    try:
+        input_seed_int = int(request.seed)
+        input_height_int = int(request.height)
+        input_width_int = int(request.width)
+        # print(f"input_seed_int value: {input_seed_int}")
+    except ValueError:
+        print("Invalid input.")
+        exit()
+
+    generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128)
+    
+    print("Generating terrain...")
+    generator.generate_terrain_river(scale=0.1, octaves=4)
+    
+    print("Rendering image...")
+    image = generator.render_to_image(show_grid=True)
+
+    image_byte_array = BytesIO()
+    image.save(image_byte_array, format="PNG")
+    image_byte_array.seek(0)
+    return StreamingResponse(image_byte_array, media_type="image/png")
+    
+    # output_file = "battlemap_test.png"
+    # image.save(output_file)
+    # print(f"Map saved to {output_file}")
