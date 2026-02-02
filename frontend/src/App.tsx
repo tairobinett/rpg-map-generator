@@ -10,6 +10,7 @@ function App() {
   const [seed, setSeed] = useState("")
   const [height, setHeight] = useState("30")
   const [width, setWidth] = useState("30")
+  const [river_width, setRiverWidth] = useState("1")
 
   const handleClick = async () => {
     try{
@@ -33,7 +34,8 @@ function App() {
         body:JSON.stringify({
           seed:seed,
           height:height,
-          width:width
+          width:width,
+          river_width:river_width
         }),
       });
       const blob = await response.blob();
@@ -73,6 +75,15 @@ function App() {
             name="seedInput" 
             value={width}
             onChange={e => setWidth(e.target.value)}
+          />
+        </label>
+      </div>
+      <div>
+        <label>
+          Enter river width: <input 
+            name="seedInput" 
+            value={river_width}
+            onChange={e => setRiverWidth(e.target.value)}
           />
         </label>
       </div>

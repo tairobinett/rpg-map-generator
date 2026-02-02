@@ -282,8 +282,6 @@ class TerrainGenerator:
         for tile in list(tiles):
             for t in self.get_tiles_in_radius(tile, river_width):
                 tiles_to_add.add(t)
-        print(tiles)
-        print(tiles_to_add)
         tiles = tiles.union(tiles_to_add)
 
         return tiles
