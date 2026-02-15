@@ -38,6 +38,7 @@ class TerrainGenerator:
         
         texture_files = {
             TerrainType.WATER: 'water.png',
+            TerrainType.GRASS: 'grass.png',
         }
         
         for terrain_type, filename in texture_files.items():

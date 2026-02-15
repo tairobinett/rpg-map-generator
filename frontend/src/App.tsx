@@ -111,7 +111,7 @@ function App() {
       </div>
 
       <p>
-        Ocean water texture tiles by 
+        Tile textures by 
         <a href="https://2minutetabletop.com"> 2 Minute Tabletop</a>, 
         licensed under 
         <a href="https://creativecommons.org/licenses/by-nc/4.0/"> CC BY-NC 4.0</a>
