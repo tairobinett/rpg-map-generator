@@ -15,17 +15,46 @@ class TerrainType:
 
 
 class TerrainGenerator:
-    def __init__(self, width, height, seed, tile_size=128):
+    def __init__(self, width, height, seed, tile_size=128, texture_folder=None):
         self.width = width
         self.height = height
         self.seed = seed
         self.tile_size = tile_size
+        self.texture_folder = texture_folder
         
         random.seed(seed)
         np.random.seed(seed)
         self.noise = OpenSimplex(seed)
         
         self.terrain_grid = np.zeros((height, width), dtype=int)
+        
+        # Load textures if folder provided
+        self.textures = {}
+        if texture_folder:
+            self.load_textures()
+        
+    def load_textures(self):
+        import os
+        
+        texture_files = {
+            TerrainType.WATER: 'water.png',
+        }
+        
+        for terrain_type, filename in texture_files.items():
+            filepath = os.path.join(self.texture_folder, filename)
+            if os.path.exists(filepath):
+                texture = Image.open(filepath).convert('RGB')
+                # Resize texture to be at least as large as tile_size
+                if texture.width < self.tile_size or texture.height < self.tile_size:
+                    new_size = max(self.tile_size, texture.width, texture.height)
+                    tiled = Image.new('RGB', (new_size, new_size))
+                    for y in range(0, new_size, texture.height):
+                        for x in range(0, new_size, texture.width):
+                            tiled.paste(texture, (x, y))
+                    texture = tiled
+                self.textures[terrain_type] = texture
+            else:
+                print(f"Warning: Texture not found: {filepath}")
         
     def generate_terrain(self, scale=0.1, octaves=4):
         # Generate multi-octave noise
@@ -89,16 +118,72 @@ class TerrainGenerator:
                 px = x * self.tile_size
                 py = y * self.tile_size
                 
-                self.draw_tile(draw, px, py, color)
+                # Try to draw with texture, pass tile coordinates for continuous mapping
+                texture_tile = self.draw_tile(draw, px, py, color, terrain_type, tile_x=x, tile_y=y)
+                if texture_tile:
+                    image.paste(texture_tile, (px, py))
         
         if show_grid:
             self.draw_grid(draw, img_width, img_height)
         
         return image
     
-    def draw_tile(self, draw, x, y, base_color):
+    def draw_tile(self, draw, x, y, base_color, terrain_type=None, tile_x=0, tile_y=0):
         size = self.tile_size
-        draw.rectangle([x, y, x + size, y + size], fill=base_color)
+        
+        # If textures are loaded and this terrain type has a texture, use it
+        if self.textures and terrain_type in self.textures:
+            texture = self.textures[terrain_type]
+            
+            # Calculate position in the continuous texture
+            texture_x = (tile_x * size) % texture.width
+            texture_y = (tile_y * size) % texture.height
+            texture_tile = Image.new('RGB', (size, size))
+            width_available = min(size, texture.width - texture_x)
+            height_available = min(size, texture.height - texture_y)
+            
+            main_section = texture.crop((
+                texture_x, 
+                texture_y, 
+                texture_x + width_available, 
+                texture_y + height_available
+            ))
+            texture_tile.paste(main_section, (0, 0))
+            
+            # wrap horizontally
+            if width_available < size:
+                right_section = texture.crop((
+                    0, 
+                    texture_y, 
+                    size - width_available, 
+                    texture_y + height_available
+                ))
+                texture_tile.paste(right_section, (width_available, 0))
+            
+            # wrap vertically
+            if height_available < size:
+                bottom_section = texture.crop((
+                    texture_x, 
+                    0, 
+                    texture_x + width_available, 
+                    size - height_available
+                ))
+                texture_tile.paste(bottom_section, (0, height_available))
+            
+            # wrap both
+            if width_available < size and height_available < size:
+                corner_section = texture.crop((
+                    0, 
+                    0, 
+                    size - width_available, 
+                    size - height_available
+                ))
+                texture_tile.paste(corner_section, (width_available, height_available))
+            
+            return texture_tile
+        else:
+            draw.rectangle([x, y, x + size, y + size], fill=base_color)
+            return None
     
     def draw_grid(self, draw, img_width, img_height):
         grid_color = (50, 50, 50, 128)

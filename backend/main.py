@@ -39,7 +39,7 @@ def generate_map(request:seed_request):
         print("Invalid input.")
         exit()
 
-    generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128)
+    generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128, texture_folder='textures')
     
     print("Generating terrain...")
     generator.generate_terrain(scale=0.1, octaves=4)
@@ -98,7 +98,7 @@ def generate_map_river(request:seed_request):
         print("Invalid input.")
         exit()
 
-    generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128)
+    generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128, texture_folder='textures')
     
     print("Generating terrain...")
     generator.generate_terrain_river(river_width=input_river_width_int, scale=0.1, octaves=4)
