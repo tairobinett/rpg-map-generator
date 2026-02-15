@@ -22,6 +22,7 @@ class seed_request(BaseModel):
     height:int
     width:int
     river_width:int
+    grid:bool
 
 @app.get("/hello")
 def hello_world():
@@ -90,6 +91,7 @@ def generate_map_river(request:seed_request):
         input_height_int = int(request.height)
         input_width_int = int(request.width)
         input_river_width_int = int(request.river_width)
+        input_grid_toggle = bool(request.grid)
         print(f"input_river_width_int value: {input_river_width_int}")
         # print(f"input_seed_int value: {input_seed_int}")
     except ValueError:
@@ -102,7 +104,7 @@ def generate_map_river(request:seed_request):
     generator.generate_terrain_river(river_width=input_river_width_int, scale=0.1, octaves=4)
     
     print("Rendering image...")
-    image = generator.render_to_image(show_grid=True)
+    image = generator.render_to_image(show_grid=input_grid_toggle)
 
     image_byte_array = BytesIO()
     image.save(image_byte_array, format="PNG")

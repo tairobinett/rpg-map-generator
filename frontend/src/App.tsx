@@ -11,6 +11,7 @@ function App() {
   const [height, setHeight] = useState("30")
   const [width, setWidth] = useState("30")
   const [river_width, setRiverWidth] = useState("1")
+  const [grid_toggle, setGridToggle] = useState(true)
 
   const handleClick = async () => {
     try{
@@ -35,7 +36,8 @@ function App() {
           seed:seed,
           height:height,
           width:width,
-          river_width:river_width
+          river_width:river_width,
+          grid:grid_toggle
         }),
       });
       const blob = await response.blob();
@@ -84,6 +86,15 @@ function App() {
             name="seedInput" 
             value={river_width}
             onChange={e => setRiverWidth(e.target.value)}
+          />
+        </label>
+      </div>
+      <div>
+        <label>
+          Toggle grid<input 
+            type="checkbox"
+            checked={grid_toggle}
+            onChange={() => setGridToggle(!grid_toggle)}
           />
         </label>
       </div>
