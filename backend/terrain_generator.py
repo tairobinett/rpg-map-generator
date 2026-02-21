@@ -15,12 +15,13 @@ class TerrainType:
 
 
 class TerrainGenerator:
-    def __init__(self, width, height, seed, tile_size=128, texture_folder=None):
+    def __init__(self, width, height, seed, tile_size=128, texture_folder=None, asset_folder=None):
         self.width = width
         self.height = height
         self.seed = seed
         self.tile_size = tile_size
         self.texture_folder = texture_folder
+        self.asset_folder = asset_folder
         
         random.seed(seed)
         np.random.seed(seed)
@@ -33,15 +34,16 @@ class TerrainGenerator:
         if texture_folder:
             self.load_textures()
         
+        
     def load_textures(self):
         import os
         
-        texture_files = {
+        terrain_texture_files = {
             TerrainType.WATER: 'water.png',
             TerrainType.GRASS: 'grass.png',
         }
         
-        for terrain_type, filename in texture_files.items():
+        for terrain_type, filename in terrain_texture_files.items():
             filepath = os.path.join(self.texture_folder, filename)
             if os.path.exists(filepath):
                 texture = Image.open(filepath).convert('RGB')
@@ -57,7 +59,20 @@ class TerrainGenerator:
             else:
                 print(f"Warning: Texture not found: {filepath}")
         
-    def generate_terrain(self, scale=0.1, octaves=4):
+        foliage_texture_files = {
+            "bush":'bush1.png'
+        }
+
+        for terrain_type, filename in foliage_texture_files.items():
+            filepath = os.path.join(self.asset_folder, filename)
+            if os.path.exists(filepath):
+                texture = Image.open(filepath).convert('RGB')
+                self.textures[terrain_type] = texture
+            else:
+                print(f"Warning: Asset not found: {filepath}")
+    
+
+    def generate_terrain(self, river_width, scale=0.1, octaves=4,):
         # Generate multi-octave noise
         noise_map = np.zeros((self.height, self.width))
         
@@ -77,8 +92,13 @@ class TerrainGenerator:
         noise_map = (noise_map - noise_map.min()) / (noise_map.max() - noise_map.min())
         
         # Convert noise values to terrain types using thresholds
-        self.terrain_grid = self.noise_to_terrain(noise_map)
+        self.terrain_grid.fill(TerrainType.GRASS)
+
+        river_tiles = self.generate_river(river_width)
         
+        for tile in list(river_tiles):
+            self.terrain_grid[tile[0], tile[1]] = TerrainType.WATER
+
         return self.terrain_grid
     
     def noise_to_terrain(self, noise_map):
@@ -127,6 +147,8 @@ class TerrainGenerator:
         if show_grid:
             self.draw_grid(draw, img_width, img_height)
         
+        image = self.draw_object(image, 1.5, 2.3, 1.0, "assets/bush1.png")
+
         return image
     
     def draw_tile(self, draw, x, y, base_color, terrain_type=None, tile_x=0, tile_y=0):
@@ -183,8 +205,30 @@ class TerrainGenerator:
             
             return texture_tile
         else:
-            draw.rectangle([x, y, x + size, y + size], fill=base_color)
+            draw.rectangle([x, y, x + size, y + size], fill=(base_color))
             return None
+    
+    def draw_object(self, image, x, y, scale, filepath):
+        obj = Image.open(filepath).convert("RGBA")
+        target_size = int(self.tile_size * scale)
+        aspect = obj.width / obj.height
+        
+        if obj.width >= obj.height:
+            obj = obj.resize((target_size, max(1, int(target_size / aspect))), Image.LANCZOS)
+        else:
+            obj = obj.resize((max(1, int(target_size * aspect)), target_size), Image.LANCZOS)
+        
+
+        px = int(x * self.tile_size) + (self.tile_size - obj.width) // 2
+        py = int(y * self.tile_size) + (self.tile_size - obj.height) // 2
+
+        image = image.convert("RGBA")
+        image.paste(obj, (px, py), mask=obj)
+
+        return image.convert("RGB")
+
+
+        
     
     def draw_grid(self, draw, img_width, img_height):
         grid_color = (50, 50, 50, 128)
@@ -196,31 +240,6 @@ class TerrainGenerator:
         # Horizontal lines
         for y in range(0, img_height + 1, self.tile_size):
             draw.line([(0, y), (img_width, y)], fill=grid_color, width=1)
-
-
-    def generate_terrain_grass(self, scale=0.1, octaves=4):
-        # Generate multi-octave noise
-        noise_map = np.zeros((self.height, self.width))
-        
-        for octave in range(octaves):
-            frequency = 2 ** octave
-            amplitude = 1 / (2 ** octave)
-            
-            for y in range(self.height):
-                for x in range(self.width):
-                    noise_val = self.noise.noise2(
-                        x * scale * frequency,
-                        y * scale * frequency
-                    )
-                    noise_map[y, x] += noise_val * amplitude
-        
-        # Normalize to 0-1 range
-        noise_map = (noise_map - noise_map.min()) / (noise_map.max() - noise_map.min())
-        
-        # Convert noise values to terrain types using thresholds
-        self.terrain_grid.fill(TerrainType.GRASS)
-        
-        return self.terrain_grid
 
     def generate_river(self, river_width):
 
@@ -382,32 +401,3 @@ class TerrainGenerator:
                 if not (x < 0 or x >= self.width or y < 0 or y >= self.height or self.distance((x,y), (target[0],target[1])) > r):
                     tiles.add((x, y))
         return tiles
-    
-    def generate_terrain_river(self, river_width, scale=0.1, octaves=4,):
-        # Generate multi-octave noise
-        noise_map = np.zeros((self.height, self.width))
-        
-        for octave in range(octaves):
-            frequency = 2 ** octave
-            amplitude = 1 / (2 ** octave)
-            
-            for y in range(self.height):
-                for x in range(self.width):
-                    noise_val = self.noise.noise2(
-                        x * scale * frequency,
-                        y * scale * frequency
-                    )
-                    noise_map[y, x] += noise_val * amplitude
-        
-        # Normalize to 0-1 range
-        noise_map = (noise_map - noise_map.min()) / (noise_map.max() - noise_map.min())
-        
-        # Convert noise values to terrain types using thresholds
-        self.terrain_grid.fill(TerrainType.GRASS)
-
-        river_tiles = self.generate_river(river_width)
-        
-        for tile in list(river_tiles):
-            self.terrain_grid[tile[0], tile[1]] = TerrainType.WATER
-
-        return self.terrain_grid

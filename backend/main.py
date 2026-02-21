@@ -34,62 +34,6 @@ def generate_map(request:seed_request):
         input_seed_int = int(request.seed)
         input_height_int = int(request.height)
         input_width_int = int(request.width)
-        # print(f"input_seed_int value: {input_seed_int}")
-    except ValueError:
-        print("Invalid input.")
-        exit()
-
-    generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128, texture_folder='textures')
-    
-    print("Generating terrain...")
-    generator.generate_terrain(scale=0.1, octaves=4)
-    
-    print("Rendering image...")
-    image = generator.render_to_image(show_grid=True)
-
-    image_byte_array = BytesIO()
-    image.save(image_byte_array, format="PNG")
-    image_byte_array.seek(0)
-    return StreamingResponse(image_byte_array, media_type="image/png")
-    
-    # output_file = "battlemap_test.png"
-    # image.save(output_file)
-    # print(f"Map saved to {output_file}")
-
-@app.post("/generate_map_grass")
-def generate_map_grass(request:seed_request):
-    try:
-        input_seed_int = int(request.seed)
-        input_height_int = int(request.height)
-        input_width_int = int(request.width)
-        # print(f"input_seed_int value: {input_seed_int}")
-    except ValueError:
-        print("Invalid input.")
-        exit()
-
-    generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128)
-    
-    print("Generating terrain...")
-    generator.generate_terrain_grass(scale=0.1, octaves=4)
-    
-    print("Rendering image...")
-    image = generator.render_to_image(show_grid=True)
-
-    image_byte_array = BytesIO()
-    image.save(image_byte_array, format="PNG")
-    image_byte_array.seek(0)
-    return StreamingResponse(image_byte_array, media_type="image/png")
-    
-    # output_file = "battlemap_test.png"
-    # image.save(output_file)
-    # print(f"Map saved to {output_file}")
-
-@app.post("/generate_map_river")
-def generate_map_river(request:seed_request):
-    try:
-        input_seed_int = int(request.seed)
-        input_height_int = int(request.height)
-        input_width_int = int(request.width)
         input_river_width_int = int(request.river_width)
         input_grid_toggle = bool(request.grid)
         print(f"input_river_width_int value: {input_river_width_int}")
@@ -98,10 +42,10 @@ def generate_map_river(request:seed_request):
         print("Invalid input.")
         exit()
 
-    generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128, texture_folder='textures')
+    generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128, texture_folder='textures', asset_folder='assets')
     
     print("Generating terrain...")
-    generator.generate_terrain_river(river_width=input_river_width_int, scale=0.1, octaves=4)
+    generator.generate_terrain(river_width=input_river_width_int, scale=0.1, octaves=4)
     
     print("Rendering image...")
     image = generator.render_to_image(show_grid=input_grid_toggle)
