@@ -22,6 +22,7 @@ class TerrainGenerator:
         self.tile_size = tile_size
         self.texture_folder = texture_folder
         self.asset_folder = asset_folder
+        self.foliage_tiles = []
         
         random.seed(seed)
         np.random.seed(seed)
@@ -98,6 +99,18 @@ class TerrainGenerator:
         
         for tile in list(river_tiles):
             self.terrain_grid[tile[0], tile[1]] = TerrainType.WATER
+        
+        # Get tiles to place foliage
+        threshold_tiles = self.get_tiles_above_threshold(noise_map, 0.5)
+
+        # Get set of grass tiles
+        threshold_grass_tiles = set()
+        for tile in threshold_tiles:
+            row, column = int(tile[0]), int(tile[1])
+            if self.terrain_grid[row, column] == TerrainType.GRASS:
+                    threshold_grass_tiles.add((row, column))
+        
+        self.foliage_tiles = threshold_grass_tiles
 
         return self.terrain_grid
     
@@ -113,6 +126,9 @@ class TerrainGenerator:
         terrain[noise_map >= 0.85] = TerrainType.MOUNTAIN
         
         return terrain
+
+    def get_tiles_above_threshold(self, noise_map, threshold): 
+        return np.argwhere(noise_map > threshold)
     
     def render_to_image(self, show_grid=True):
         img_width = self.width * self.tile_size
@@ -132,7 +148,7 @@ class TerrainGenerator:
         
         for y in range(self.height):
             for x in range(self.width):
-                terrain_type = self.terrain_grid[y, x]
+                terrain_type = self.terrain_grid[x, y]
                 color = colors[terrain_type]
                 
                 # Calculate pixel coordinates
@@ -147,7 +163,9 @@ class TerrainGenerator:
         if show_grid:
             self.draw_grid(draw, img_width, img_height)
         
-        image = self.draw_object(image, 1.5, 2.3, 1.0, "assets/bush1.png")
+        #image = self.draw_object(image, 1.5, 2.3, 1.0, "assets/bush1.png")
+        for row, column in self.foliage_tiles:
+            image = self.draw_object(image, row, column, 1.0, "assets/bush1.png")
 
         return image
     
@@ -225,10 +243,7 @@ class TerrainGenerator:
         image = image.convert("RGBA")
         image.paste(obj, (px, py), mask=obj)
 
-        return image.convert("RGB")
-
-
-        
+        return image.convert("RGB")    
     
     def draw_grid(self, draw, img_width, img_height):
         grid_color = (50, 50, 50, 128)
