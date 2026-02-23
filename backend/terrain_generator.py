@@ -3,6 +3,7 @@ from PIL import Image, ImageDraw
 from opensimplex import OpenSimplex
 import random
 import math
+import os
 
 
 class TerrainType:
@@ -163,13 +164,13 @@ class TerrainGenerator:
         
         if show_grid:
             self.draw_grid(draw, img_width, img_height)
-        
-        #image = self.draw_object(image, 1.5, 2.3, 1.0, "assets/bush1.png")
+
         random.seed(self.seed)
         for row, column in self.foliage_tiles:
             x_offset = random.random() - 0.5
             y_offset = random.random() - 0.5
-            image = self.draw_object(image, row + x_offset, column + y_offset, 1.0, "assets/bush1.png")
+            foliage_random_choice = "assets/" + random.choice(os.listdir(self.asset_folder)) # Choose which foliage sprite to use randomly from asset folder
+            image = self.draw_object(image, row + x_offset, column + y_offset, 1.0, foliage_random_choice)
 
         return image
     
