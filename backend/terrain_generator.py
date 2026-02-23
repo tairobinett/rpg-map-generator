@@ -108,9 +108,7 @@ class TerrainGenerator:
         random.seed(self.seed)
         for tile in threshold_tiles:
             row, column = int(tile[0]), int(tile[1])
-            rand = random.random()
-            print(f"rand:", rand)
-            if self.terrain_grid[row, column] == TerrainType.GRASS and rand <= foliage_coverage:
+            if self.terrain_grid[row, column] == TerrainType.GRASS and random.random() <= foliage_coverage:
                     threshold_grass_tiles.add((row, column))
         
         self.foliage_tiles = threshold_grass_tiles
@@ -167,8 +165,11 @@ class TerrainGenerator:
             self.draw_grid(draw, img_width, img_height)
         
         #image = self.draw_object(image, 1.5, 2.3, 1.0, "assets/bush1.png")
+        random.seed(self.seed)
         for row, column in self.foliage_tiles:
-            image = self.draw_object(image, row, column, 1.0, "assets/bush1.png")
+            x_offset = random.random() - 0.5
+            y_offset = random.random() - 0.5
+            image = self.draw_object(image, row + x_offset, column + y_offset, 1.0, "assets/bush1.png")
 
         return image
     
