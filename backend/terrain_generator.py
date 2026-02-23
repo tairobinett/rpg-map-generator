@@ -73,7 +73,7 @@ class TerrainGenerator:
                 print(f"Warning: Asset not found: {filepath}")
     
 
-    def generate_terrain(self, river_width, scale=0.1, octaves=4,):
+    def generate_terrain(self, river_width, scale=0.1, octaves=4, foliage_coverage=0.75):
         # Generate multi-octave noise
         noise_map = np.zeros((self.height, self.width))
         
@@ -105,9 +105,12 @@ class TerrainGenerator:
 
         # Get set of grass tiles
         threshold_grass_tiles = set()
+        random.seed(self.seed)
         for tile in threshold_tiles:
             row, column = int(tile[0]), int(tile[1])
-            if self.terrain_grid[row, column] == TerrainType.GRASS:
+            rand = random.random()
+            print(f"rand:", rand)
+            if self.terrain_grid[row, column] == TerrainType.GRASS and rand <= foliage_coverage:
                     threshold_grass_tiles.add((row, column))
         
         self.foliage_tiles = threshold_grass_tiles
