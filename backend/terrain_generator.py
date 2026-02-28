@@ -1,6 +1,6 @@
 import numpy as np
 from PIL import Image, ImageDraw
-from opensimplex import OpenSimplex
+from opensimplex import OpenSimplex, noise2array
 import random
 import math
 import os
@@ -77,18 +77,12 @@ class TerrainGenerator:
     def generate_terrain(self, river_width, scale=0.1, octaves=4, foliage_coverage=0.75):
         # Generate multi-octave noise
         noise_map = np.zeros((self.height, self.width))
-        
         for octave in range(octaves):
             frequency = 2 ** octave
             amplitude = 1 / (2 ** octave)
-            
-            for y in range(self.height):
-                for x in range(self.width):
-                    noise_val = self.noise.noise2(
-                        x * scale * frequency,
-                        y * scale * frequency
-                    )
-                    noise_map[y, x] += noise_val * amplitude
+            xs = np.arange(self.width) * scale * frequency
+            ys = np.arange(self.height) * scale * frequency
+            noise_map += noise2array(xs, ys) * amplitude
         
         # Normalize to 0-1 range
         noise_map = (noise_map - noise_map.min()) / (noise_map.max() - noise_map.min())
@@ -135,10 +129,7 @@ class TerrainGenerator:
     def render_to_image(self, show_grid=True):
         img_width = self.width * self.tile_size
         img_height = self.height * self.tile_size
-        
-        image = Image.new('RGB', (img_width, img_height))
-        draw = ImageDraw.Draw(image)
-        
+    
         colors = {
             TerrainType.WATER:      (65, 105, 225),
             TerrainType.SAND:       (238, 214, 175),
@@ -147,32 +138,59 @@ class TerrainGenerator:
             TerrainType.HILL:       (139, 90, 43),
             TerrainType.MOUNTAIN:   (105, 105, 105),
         }
-        
-        for y in range(self.height):
-            for x in range(self.width):
-                terrain_type = self.terrain_grid[x, y]
-                color = colors[terrain_type]
-                
-                # Calculate pixel coordinates
-                px = x * self.tile_size
-                py = y * self.tile_size
-                
-                # Try to draw with texture, pass tile coordinates for continuous mapping
-                texture_tile = self.draw_tile(draw, px, py, color, terrain_type, tile_x=x, tile_y=y)
+    
+        color_array = np.zeros((img_height, img_width, 3), dtype=np.uint8)
+        for terrain_type, color in colors.items():
+            # Find all tiles of this terrain type
+            mask = (self.terrain_grid == terrain_type)
+            # For each matching tile, fill its pixel region in the array
+            xs, ys = np.where(mask)
+            for x, y in zip(xs, ys):
+                px, py = x * self.tile_size, y * self.tile_size
+                color_array[py:py+self.tile_size, px:px+self.tile_size] = color
+    
+        image = Image.fromarray(color_array, 'RGB')
+    
+        # Paste textures only where needed, on top of the base image
+        for terrain_type, texture in self.textures.items():
+            mask = (self.terrain_grid == terrain_type)
+            xs, ys = np.where(mask)
+            for x, y in zip(xs, ys):
+                px, py = x * self.tile_size, y * self.tile_size
+                texture_tile = self.draw_tile(None, px, py, colors[terrain_type], terrain_type, tile_x=x, tile_y=y)
                 if texture_tile:
                     image.paste(texture_tile, (px, py))
-        
+    
         if show_grid:
+            draw = ImageDraw.Draw(image)
             self.draw_grid(draw, img_width, img_height)
-
+    
+        # Foliage rendering
         random.seed(self.seed)
+        asset_files = os.listdir(self.asset_folder)
+        target_size = self.tile_size
+        asset_cache = {}
+        for filename in asset_files:
+            filepath = "assets/" + filename
+            obj = Image.open(filepath).convert("RGBA")
+            aspect = obj.width / obj.height
+            if obj.width >= obj.height:
+                obj = obj.resize((target_size, max(1, int(target_size / aspect))), Image.LANCZOS)
+            else:
+                obj = obj.resize((max(1, int(target_size * aspect)), target_size), Image.LANCZOS)
+            asset_cache[filepath] = obj
+    
+        image = image.convert("RGBA")
         for row, column in self.foliage_tiles:
             x_offset = random.random() - 0.5
             y_offset = random.random() - 0.5
-            # Choose which foliage sprite to use randomly from asset folder
-            foliage_random_choice = self.asset_folder + "/" + random.choice(os.listdir(self.asset_folder))
-            image = self.draw_object(image, row + x_offset, column + y_offset, 1.0, foliage_random_choice)
-
+            foliage_random_choice = "assets/" + random.choice(asset_files)
+            obj = asset_cache[foliage_random_choice]
+            px = int((row + x_offset) * self.tile_size) + (self.tile_size - obj.width) // 2
+            py = int((column + y_offset) * self.tile_size) + (self.tile_size - obj.height) // 2
+            image.paste(obj, (px, py), mask=obj)
+        image = image.convert("RGB")
+    
         return image
     
     def draw_tile(self, draw, x, y, base_color, terrain_type=None, tile_x=0, tile_y=0):
@@ -232,24 +250,22 @@ class TerrainGenerator:
             draw.rectangle([x, y, x + size, y + size], fill=(base_color))
             return None
     
-    def draw_object(self, image, x, y, scale, filepath):
-        obj = Image.open(filepath).convert("RGBA")
+    def draw_object(self, image, x, y, scale, obj):
         target_size = int(self.tile_size * scale)
         aspect = obj.width / obj.height
-        
+    
         if obj.width >= obj.height:
             obj = obj.resize((target_size, max(1, int(target_size / aspect))), Image.LANCZOS)
         else:
             obj = obj.resize((max(1, int(target_size * aspect)), target_size), Image.LANCZOS)
-        
-
+    
         px = int(x * self.tile_size) + (self.tile_size - obj.width) // 2
         py = int(y * self.tile_size) + (self.tile_size - obj.height) // 2
-
+    
         image = image.convert("RGBA")
         image.paste(obj, (px, py), mask=obj)
-
-        return image.convert("RGB")    
+    
+        return image.convert("RGB")
     
     def draw_grid(self, draw, img_width, img_height):
         grid_color = (50, 50, 50, 128)
@@ -301,7 +317,7 @@ class TerrainGenerator:
         # River start to midpoint
         if(current_pos not in tiles and current_pos[0] >= 0 and current_pos[0] < self.width and current_pos[1] >= 0 and current_pos[1] < self.height):
             tiles.add(current_pos)
-        while(not (current_pos[0] is mid_point[0] and current_pos[1] is mid_point[1]) and counter < iteration_limit):
+        while(not (current_pos[0] == mid_point[0] and current_pos[1] == mid_point[1]) and counter < iteration_limit):
             counter += 1
             if(current_pos not in tiles and current_pos[0] >= 0 and current_pos[0] < self.width and current_pos[1] >= 0 and current_pos[1] < self.height):
                 tiles.add(current_pos)
@@ -352,7 +368,7 @@ class TerrainGenerator:
         counter = 0
         # River midpoint to end
         while(current_pos[0] > 0 and current_pos[0] < self.width and current_pos[1] > 0 and current_pos[1] < self.height and 
-                not (current_pos[0] is river_end[0] and current_pos[1] is river_end[1]) and counter < iteration_limit):
+                not (current_pos[0] == river_end[0] and current_pos[1] == river_end[1]) and counter < iteration_limit):
             counter += 1
             if(current_pos not in tiles and current_pos[0] >= 0 and current_pos[0] < self.width and current_pos[1] >= 0 and current_pos[1] < self.height):
                 tiles.add(current_pos)
