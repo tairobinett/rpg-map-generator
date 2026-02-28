@@ -169,7 +169,8 @@ class TerrainGenerator:
         for row, column in self.foliage_tiles:
             x_offset = random.random() - 0.5
             y_offset = random.random() - 0.5
-            foliage_random_choice = "assets/" + random.choice(os.listdir(self.asset_folder)) # Choose which foliage sprite to use randomly from asset folder
+            # Choose which foliage sprite to use randomly from asset folder
+            foliage_random_choice = self.asset_folder + "/" + random.choice(os.listdir(self.asset_folder))
             image = self.draw_object(image, row + x_offset, column + y_offset, 1.0, foliage_random_choice)
 
         return image
