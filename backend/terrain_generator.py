@@ -60,18 +60,7 @@ class TerrainGenerator:
                 self.textures[terrain_type] = texture
             else:
                 print(f"Warning: Texture not found: {filepath}")
-        
-        foliage_texture_files = {
-            "bush":'bush1.png'
-        }
 
-        for terrain_type, filename in foliage_texture_files.items():
-            filepath = os.path.join(self.asset_folder, filename)
-            if os.path.exists(filepath):
-                texture = Image.open(filepath).convert('RGB')
-                self.textures[terrain_type] = texture
-            else:
-                print(f"Warning: Asset not found: {filepath}")
     
 
     def generate_terrain(self, river_width, scale=0.1, octaves=4, foliage_coverage=0.75):
@@ -249,23 +238,6 @@ class TerrainGenerator:
         else:
             draw.rectangle([x, y, x + size, y + size], fill=(base_color))
             return None
-    
-    def draw_object(self, image, x, y, scale, obj):
-        target_size = int(self.tile_size * scale)
-        aspect = obj.width / obj.height
-    
-        if obj.width >= obj.height:
-            obj = obj.resize((target_size, max(1, int(target_size / aspect))), Image.LANCZOS)
-        else:
-            obj = obj.resize((max(1, int(target_size * aspect)), target_size), Image.LANCZOS)
-    
-        px = int(x * self.tile_size) + (self.tile_size - obj.width) // 2
-        py = int(y * self.tile_size) + (self.tile_size - obj.height) // 2
-    
-        image = image.convert("RGBA")
-        image.paste(obj, (px, py), mask=obj)
-    
-        return image.convert("RGB")
     
     def draw_grid(self, draw, img_width, img_height):
         grid_color = (50, 50, 50, 128)
