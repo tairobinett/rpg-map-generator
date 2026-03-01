@@ -64,19 +64,19 @@ function App() {
       </div>
       <div>
         <label>
-          Enter map height: <input 
+          Enter map width: <input 
             name="seedInput" 
-            value={height}
-            onChange={e => setHeight(e.target.value)}
+            value={width}
+            onChange={e => setWidth(e.target.value)}
           />
         </label>
       </div>
       <div>
         <label>
-          Enter map width: <input 
+          Enter map height: <input 
             name="seedInput" 
-            value={width}
-            onChange={e => setWidth(e.target.value)}
+            value={height}
+            onChange={e => setHeight(e.target.value)}
           />
         </label>
       </div>

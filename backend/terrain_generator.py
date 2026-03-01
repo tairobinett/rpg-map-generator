@@ -82,7 +82,7 @@ class TerrainGenerator:
         river_tiles = self.generate_river(river_width)
         
         for tile in list(river_tiles):
-            self.terrain_grid[tile[0], tile[1]] = TerrainType.WATER
+            self.terrain_grid[tile[1], tile[0]] = TerrainType.WATER #TODO: error when generating uneven maps sometimes
         
         # Get tiles to place foliage
         threshold_tiles = self.get_tiles_above_threshold(noise_map, 0.5)
@@ -132,10 +132,9 @@ class TerrainGenerator:
         for terrain_type, color in colors.items():
             # Find all tiles of this terrain type
             mask = (self.terrain_grid == terrain_type)
-            # For each matching tile, fill its pixel region in the array
-            xs, ys = np.where(mask)
-            for x, y in zip(xs, ys):
-                px, py = x * self.tile_size, y * self.tile_size
+            rows, cols = np.where(mask)
+            for row, col in zip(rows, cols):
+                px, py = col * self.tile_size, row * self.tile_size
                 color_array[py:py+self.tile_size, px:px+self.tile_size] = color
     
         image = Image.fromarray(color_array, 'RGB')
@@ -143,12 +142,13 @@ class TerrainGenerator:
         # Paste textures only where needed, on top of the base image
         for terrain_type, texture in self.textures.items():
             mask = (self.terrain_grid == terrain_type)
-            xs, ys = np.where(mask)
-            for x, y in zip(xs, ys):
-                px, py = x * self.tile_size, y * self.tile_size
-                texture_tile = self.draw_tile(None, px, py, colors[terrain_type], terrain_type, tile_x=x, tile_y=y)
+            rows, cols = np.where(mask)
+            for row, col in zip(rows, cols):
+                px, py = col * self.tile_size, row * self.tile_size
+                texture_tile = self.draw_tile(None, px, py, colors[terrain_type], terrain_type, tile_x=col, tile_y=row)
                 if texture_tile:
                     image.paste(texture_tile, (px, py))
+
     
         if show_grid:
             draw = ImageDraw.Draw(image)
@@ -160,7 +160,7 @@ class TerrainGenerator:
         target_size = self.tile_size
         asset_cache = {}
         for filename in asset_files:
-            filepath = "assets/" + filename
+            filepath = self.asset_folder + "/" + filename
             obj = Image.open(filepath).convert("RGBA")
             aspect = obj.width / obj.height
             if obj.width >= obj.height:
@@ -173,10 +173,10 @@ class TerrainGenerator:
         for row, column in self.foliage_tiles:
             x_offset = random.random() - 0.5
             y_offset = random.random() - 0.5
-            foliage_random_choice = "assets/" + random.choice(asset_files)
+            foliage_random_choice = self.asset_folder + "/" + random.choice(asset_files)
             obj = asset_cache[foliage_random_choice]
-            px = int((row + x_offset) * self.tile_size) + (self.tile_size - obj.width) // 2
-            py = int((column + y_offset) * self.tile_size) + (self.tile_size - obj.height) // 2
+            px = int((column + x_offset) * self.tile_size) + (self.tile_size - obj.width) // 2
+            py = int((row + y_offset) * self.tile_size) + (self.tile_size - obj.height) // 2
             image.paste(obj, (px, py), mask=obj)
         image = image.convert("RGB")
     
@@ -275,7 +275,7 @@ class TerrainGenerator:
         if choose_end_wall == 0:
             river_end = (0, random.randint(1, self.height-1))
         elif choose_end_wall == 1:
-            river_end = (0, random.randint(1, self.width-1))
+            river_end = (random.randint(1, self.width-1), 0)
         elif choose_end_wall == 2:
             river_end = (self.width-1, random.randint(1, self.height-1))
         else:
