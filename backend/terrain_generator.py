@@ -1,6 +1,7 @@
 import numpy as np
 from PIL import Image, ImageDraw
 from opensimplex import OpenSimplex, noise2array
+from scipy.interpolate import splprep, splev
 import random
 import math
 import os
@@ -24,27 +25,27 @@ class TerrainGenerator:
         self.texture_folder = texture_folder
         self.asset_folder = asset_folder
         self.foliage_tiles = []
-        
+
         random.seed(seed)
         np.random.seed(seed)
         self.noise = OpenSimplex(seed)
-        
+
         self.terrain_grid = np.zeros((height, width), dtype=int)
-        
+
         # Load textures if folder provided
         self.textures = {}
         if texture_folder:
             self.load_textures()
-        
-        
+
+
     def load_textures(self):
         import os
-        
+
         terrain_texture_files = {
             TerrainType.WATER: 'water.png',
             TerrainType.GRASS: 'grass.png',
         }
-        
+
         for terrain_type, filename in terrain_texture_files.items():
             filepath = os.path.join(self.texture_folder, filename)
             if os.path.exists(filepath):
@@ -61,7 +62,7 @@ class TerrainGenerator:
             else:
                 print(f"Warning: Texture not found: {filepath}")
 
-    
+
 
     def generate_terrain(self, river_width, scale=0.1, octaves=4, foliage_coverage=0.75):
         # Generate multi-octave noise
@@ -72,36 +73,45 @@ class TerrainGenerator:
             xs = np.arange(self.width) * scale * frequency
             ys = np.arange(self.height) * scale * frequency
             noise_map += noise2array(xs, ys) * amplitude
-        
+
         # Normalize to 0-1 range
         noise_map = (noise_map - noise_map.min()) / (noise_map.max() - noise_map.min())
-        
+
         # Convert noise values to terrain types using thresholds
         self.terrain_grid.fill(TerrainType.GRASS)
 
-        river_tiles = self.generate_river(river_width)
-        
+        # Generate smooth pixel-space river mask and stamp water tiles from it
+        river_pixel_mask, river_tiles = self.generate_river(river_width)
+        self.river_pixel_mask = river_pixel_mask  # store for rendering
+
         for tile in list(river_tiles):
-            self.terrain_grid[tile[1], tile[0]] = TerrainType.WATER #TODO: error when generating uneven maps sometimes
-        
+            self.terrain_grid[tile[1], tile[0]] = TerrainType.WATER
+
         # Get tiles to place foliage
         threshold_tiles = self.get_tiles_above_threshold(noise_map, 0.5)
 
-        # Get set of grass tiles
+        # Get set of grass tiles, exclude any inside the river pixel mask
         threshold_grass_tiles = set()
         random.seed(self.seed)
         for tile in threshold_tiles:
             row, column = int(tile[0]), int(tile[1])
-            if self.terrain_grid[row, column] == TerrainType.GRASS and random.random() <= foliage_coverage:
+            if self.terrain_grid[row, column] == TerrainType.GRASS:
+                # Exclude tiles with center inside river pixel mask
+                center_px = column * self.tile_size + self.tile_size // 2
+                center_py = row * self.tile_size + self.tile_size // 2
+                if 0 <= center_py < river_pixel_mask.shape[0] and 0 <= center_px < river_pixel_mask.shape[1]:
+                    if river_pixel_mask[center_py, center_px]:
+                        continue
+                if random.random() <= foliage_coverage:
                     threshold_grass_tiles.add((row, column))
-        
+
         self.foliage_tiles = threshold_grass_tiles
 
         return self.terrain_grid
-    
+
     def noise_to_terrain(self, noise_map):
         terrain = np.zeros_like(noise_map, dtype=int)
-        
+
         # Thresholds for different terrain types
         terrain[noise_map < 0.3] = TerrainType.WATER
         terrain[(noise_map >= 0.3) & (noise_map < 0.35)] = TerrainType.SAND
@@ -109,16 +119,16 @@ class TerrainGenerator:
         terrain[(noise_map >= 0.55) & (noise_map < 0.7)] = TerrainType.FOREST
         terrain[(noise_map >= 0.7) & (noise_map < 0.85)] = TerrainType.HILL
         terrain[noise_map >= 0.85] = TerrainType.MOUNTAIN
-        
+
         return terrain
 
     def get_tiles_above_threshold(self, noise_map, threshold): 
         return np.argwhere(noise_map > threshold)
-    
+
     def render_to_image(self, show_grid=True):
         img_width = self.width * self.tile_size
         img_height = self.height * self.tile_size
-    
+
         colors = {
             TerrainType.WATER:      (65, 105, 225),
             TerrainType.SAND:       (238, 214, 175),
@@ -127,20 +137,22 @@ class TerrainGenerator:
             TerrainType.HILL:       (139, 90, 43),
             TerrainType.MOUNTAIN:   (105, 105, 105),
         }
-    
+
+        # Render all tiles as grass first
         color_array = np.zeros((img_height, img_width, 3), dtype=np.uint8)
         for terrain_type, color in colors.items():
-            # Find all tiles of this terrain type
             mask = (self.terrain_grid == terrain_type)
             rows, cols = np.where(mask)
             for row, col in zip(rows, cols):
                 px, py = col * self.tile_size, row * self.tile_size
                 color_array[py:py+self.tile_size, px:px+self.tile_size] = color
-    
+
         image = Image.fromarray(color_array, 'RGB')
-    
-        # Paste textures only where needed, on top of the base image
+
+        # Paste textures for non-water terrain
         for terrain_type, texture in self.textures.items():
+            if terrain_type == TerrainType.WATER:
+                continue  # water drawn via smooth mask below
             mask = (self.terrain_grid == terrain_type)
             rows, cols = np.where(mask)
             for row, col in zip(rows, cols):
@@ -149,11 +161,21 @@ class TerrainGenerator:
                 if texture_tile:
                     image.paste(texture_tile, (px, py))
 
-    
+        if TerrainType.GRASS in self.textures:
+            water_mask = (self.terrain_grid == TerrainType.WATER)
+            rows, cols = np.where(water_mask)
+            for row, col in zip(rows, cols):
+                px, py = col * self.tile_size, row * self.tile_size
+                texture_tile = self.draw_tile(None, px, py, colors[TerrainType.GRASS], TerrainType.GRASS, tile_x=col, tile_y=row)
+                if texture_tile:
+                    image.paste(texture_tile, (px, py))
+
+        image = self._render_smooth_water(image, colors)
+
         if show_grid:
             draw = ImageDraw.Draw(image)
             self.draw_grid(draw, img_width, img_height)
-    
+
         # Foliage rendering
         random.seed(self.seed)
         asset_files = os.listdir(self.asset_folder)
@@ -168,7 +190,7 @@ class TerrainGenerator:
             else:
                 obj = obj.resize((max(1, int(target_size * aspect)), target_size), Image.LANCZOS)
             asset_cache[filepath] = obj
-    
+
         image = image.convert("RGBA")
         for row, column in self.foliage_tiles:
             x_offset = random.random() - 0.5
@@ -179,23 +201,61 @@ class TerrainGenerator:
             py = int((row + y_offset) * self.tile_size) + (self.tile_size - obj.height) // 2
             image.paste(obj, (px, py), mask=obj)
         image = image.convert("RGB")
-    
+
         return image
-    
+
+    def _render_smooth_water(self, base_image, colors):
+        if not hasattr(self, 'river_pixel_mask') or self.river_pixel_mask is None:
+            return base_image
+
+        ts = self.tile_size
+        img_w = self.width * ts
+        img_h = self.height * ts
+
+        water_layer = Image.new('RGB', (img_w, img_h))
+        if TerrainType.WATER in self.textures:
+            water_mask_tiles = (self.terrain_grid == TerrainType.WATER)
+            wrows, wcols = np.where(water_mask_tiles)
+            for row, col in zip(wrows, wcols):
+                px, py = col * ts, row * ts
+                tile = self.draw_tile(None, px, py, colors[TerrainType.WATER], TerrainType.WATER, tile_x=col, tile_y=row)
+                if tile:
+                    water_layer.paste(tile, (px, py))
+                else:
+                    draw = ImageDraw.Draw(water_layer)
+                    draw.rectangle([px, py, px+ts, py+ts], fill=colors[TerrainType.WATER])
+        else:
+            # Flat color fallback
+            wc = colors[TerrainType.WATER]
+            draw = ImageDraw.Draw(water_layer)
+            water_mask_tiles = (self.terrain_grid == TerrainType.WATER)
+            wrows, wcols = np.where(water_mask_tiles)
+            for row, col in zip(wrows, wcols):
+                px, py = col * ts, row * ts
+                draw.rectangle([px, py, px+ts, py+ts], fill=wc)
+
+        # river_pixel_mask is a boolean array at pixel resolution (img_h x img_w)
+        # Use as alpha channel to composite water over base
+        mask_img = Image.fromarray((self.river_pixel_mask * 255).astype(np.uint8), 'L')
+
+        result = base_image.copy()
+        result.paste(water_layer, (0, 0), mask=mask_img)
+        return result
+
     def draw_tile(self, draw, x, y, base_color, terrain_type=None, tile_x=0, tile_y=0):
         size = self.tile_size
-        
+
         # If textures are loaded and this terrain type has a texture, use it
         if self.textures and terrain_type in self.textures:
             texture = self.textures[terrain_type]
-            
+
             # Calculate position in the continuous texture
             texture_x = (tile_x * size) % texture.width
             texture_y = (tile_y * size) % texture.height
             texture_tile = Image.new('RGB', (size, size))
             width_available = min(size, texture.width - texture_x)
             height_available = min(size, texture.height - texture_y)
-            
+
             main_section = texture.crop((
                 texture_x, 
                 texture_y, 
@@ -203,7 +263,7 @@ class TerrainGenerator:
                 texture_y + height_available
             ))
             texture_tile.paste(main_section, (0, 0))
-            
+
             # wrap horizontally
             if width_available < size:
                 right_section = texture.crop((
@@ -213,7 +273,7 @@ class TerrainGenerator:
                     texture_y + height_available
                 ))
                 texture_tile.paste(right_section, (width_available, 0))
-            
+
             # wrap vertically
             if height_available < size:
                 bottom_section = texture.crop((
@@ -223,7 +283,7 @@ class TerrainGenerator:
                     size - height_available
                 ))
                 texture_tile.paste(bottom_section, (0, height_available))
-            
+
             # wrap both
             if width_available < size and height_available < size:
                 corner_section = texture.crop((
@@ -233,173 +293,112 @@ class TerrainGenerator:
                     size - height_available
                 ))
                 texture_tile.paste(corner_section, (width_available, height_available))
-            
+
             return texture_tile
         else:
             draw.rectangle([x, y, x + size, y + size], fill=(base_color))
             return None
-    
+
     def draw_grid(self, draw, img_width, img_height):
         grid_color = (50, 50, 50, 128)
-        
+
         # Vertical lines
         for x in range(0, img_width + 1, self.tile_size):
             draw.line([(x, 0), (x, img_height)], fill=grid_color, width=1)
-        
+
         # Horizontal lines
         for y in range(0, img_height + 1, self.tile_size):
             draw.line([(0, y), (img_width, y)], fill=grid_color, width=1)
 
     def generate_river(self, river_width):
+        ts = self.tile_size
+        img_w = self.width * ts
+        img_h = self.height * ts
 
-        choose_start_wall = random.randint(0,3) # 0=left, 1=top, 2=right, 3=bottom
+        choose_start_wall = random.randint(0, 3)  # 0=left, 1=top, 2=right, 3=bottom
         choose_end_wall = choose_start_wall
         while choose_end_wall == choose_start_wall:
-            choose_end_wall = random.randint(0,3)
+            choose_end_wall = random.randint(0, 3)
 
-        river_start = (0,0)
-        river_end = (0,0)
-        mid_point = (random.randint(1,self.width-1), random.randint(1,self.height-1)) # Random point in interior
-        target_weight = 0.75
-        
-        # Choose starting and ending points
-        if choose_start_wall == 0:
-            river_start = (0, random.randint(1, self.height-1))
-        elif choose_start_wall == 1:
-            river_start = (random.randint(1, self.width-1), 0)
-        elif choose_start_wall == 2:
-            river_start = (self.width-1, random.randint(1, self.height-1))
-        else:
-            river_start = (random.randint(1, self.width-1), self.height-1)
+        def wall_point_px(wall):
+            margin = ts  # start right at the edge
+            if wall == 0:   # left
+                return (0, random.randint(ts, img_h - ts))
+            elif wall == 1: # top
+                return (random.randint(ts, img_w - ts), 0)
+            elif wall == 2: # right
+                return (img_w, random.randint(ts, img_h - ts))
+            else:           # bottom
+                return (random.randint(ts, img_w - ts), img_h)
 
-        if choose_end_wall == 0:
-            river_end = (0, random.randint(1, self.height-1))
-        elif choose_end_wall == 1:
-            river_end = (random.randint(1, self.width-1), 0)
-        elif choose_end_wall == 2:
-            river_end = (self.width-1, random.randint(1, self.height-1))
-        else:
-            river_end = (random.randint(1, self.width-1), self.height-1)
-        
+        start_px = wall_point_px(choose_start_wall)
+        end_px   = wall_point_px(choose_end_wall)
+
+        # Generate 2-3 river waypoints on map
+        # Divide the map into segments, pick one point per segment
+        # River flows naturally between points without looping back
+        num_waypoints = random.randint(2, 3)
+        interior_pts = []
+        padding = ts * 2
+        for i in range(num_waypoints):
+            t = (i + 1) / (num_waypoints + 1)
+
+            base_x = start_px[0] + (end_px[0] - start_px[0]) * t
+            base_y = start_px[1] + (end_px[1] - start_px[1]) * t
+            jitter_x = random.uniform(-img_w * 0.25, img_w * 0.25)
+            jitter_y = random.uniform(-img_h * 0.25, img_h * 0.25)
+            wx = int(max(padding, min(img_w - padding, base_x + jitter_x)))
+            wy = int(max(padding, min(img_h - padding, base_y + jitter_y)))
+            interior_pts.append((wx, wy))
+
+        px_points = [start_px] + interior_pts + [end_px]
+
+        river_radius_px = river_width * ts
+        pixel_mask = self._rasterize_river_spline(px_points, river_radius_px, img_w, img_h)
+
         tiles = set()
-        counter = 0
-        iteration_limit = 1000
-        current_pos = river_start
+        mask_reshaped = pixel_mask.reshape(self.height, ts, self.width, ts)
+        tile_covered = mask_reshaped.any(axis=(1, 3))
+        rows, cols = np.where(tile_covered)
+        for r, c in zip(rows, cols):
+            tiles.add((c, r))
 
-        # River start to midpoint
-        if(current_pos not in tiles and current_pos[0] >= 0 and current_pos[0] < self.width and current_pos[1] >= 0 and current_pos[1] < self.height):
-            tiles.add(current_pos)
-        while(not (current_pos[0] == mid_point[0] and current_pos[1] == mid_point[1]) and counter < iteration_limit):
-            counter += 1
-            if(current_pos not in tiles and current_pos[0] >= 0 and current_pos[0] < self.width and current_pos[1] >= 0 and current_pos[1] < self.height):
-                tiles.add(current_pos)
-            if(random.uniform(0, 1) < target_weight):
-                if current_pos[0] < mid_point[0] and current_pos[1] < mid_point[1]:
-                    if(random.uniform(0, 1) < 0.5):
-                        current_pos = (current_pos[0]+1, current_pos[1])
-                    else:
-                        current_pos = (current_pos[0], current_pos[1]+1)
-                elif current_pos[0] < mid_point[0] and current_pos[1] > mid_point[1]:
-                    if(random.uniform(0, 1) < 0.5):
-                        current_pos = (current_pos[0]+1, current_pos[1])
-                    else:
-                        current_pos = (current_pos[0], current_pos[1]-1)
-                elif current_pos[0] > mid_point[0] and current_pos[1] < mid_point[1]:
-                    if(random.uniform(0, 1) < 0.5):
-                        current_pos = (current_pos[0]-1, current_pos[1])
-                    else:
-                        current_pos = (current_pos[0], current_pos[1]+1)
-                elif current_pos[0] > mid_point[0] and current_pos[1] > mid_point[1]:
-                    if(random.uniform(0, 1) < 0.5):
-                        current_pos = (current_pos[0]-1, current_pos[1])
-                    else:
-                        current_pos = (current_pos[0], current_pos[1]-1)
-                elif current_pos[0] < mid_point[0]:
-                    current_pos = (current_pos[0]+1, current_pos[1]) # right
-                elif current_pos[1] < mid_point[1]:
-                    current_pos = (current_pos[0], current_pos[1]+1) # down
-                elif current_pos[0] > mid_point[0]:
-                    current_pos = (current_pos[0]-1, current_pos[1]) # left
-                elif current_pos[1] > mid_point[1]:
-                    current_pos = (current_pos[0], current_pos[1]-1) # up
-            else:
-                dir = random.randint(0, 3)
-                if dir == 0:
-                    if current_pos[0] - 1 > 0:
-                        current_pos = (current_pos[0] - 1, current_pos[1])
-                elif dir == 1:
-                    if current_pos[1] - 1 > 0:
-                        current_pos = (current_pos[0], current_pos[1] - 1)
-                elif dir == 2:
-                    if current_pos[0] + 1 < self.width - 1:
-                        current_pos = (current_pos[0] + 1, current_pos[1])
-                else:
-                    if current_pos[1] - 1 < self.height - 1:
-                        current_pos = (current_pos[0], current_pos[1] + 1)
-        
-        counter = 0
-        # River midpoint to end
-        while(current_pos[0] > 0 and current_pos[0] < self.width and current_pos[1] > 0 and current_pos[1] < self.height and 
-                not (current_pos[0] == river_end[0] and current_pos[1] == river_end[1]) and counter < iteration_limit):
-            counter += 1
-            if(current_pos not in tiles and current_pos[0] >= 0 and current_pos[0] < self.width and current_pos[1] >= 0 and current_pos[1] < self.height):
-                tiles.add(current_pos)
-            if(random.uniform(0, 1) < target_weight):
-                if current_pos[0] < river_end[0] and current_pos[1] < river_end[1]:
-                    if(random.uniform(0, 1) < 0.5):
-                        current_pos = (current_pos[0]+1, current_pos[1])
-                    else:
-                        current_pos = (current_pos[0], current_pos[1]+1)
-                elif current_pos[0] < river_end[0] and current_pos[1] > river_end[1]:
-                    if(random.uniform(0, 1) < 0.5):
-                        current_pos = (current_pos[0]+1, current_pos[1])
-                    else:
-                        current_pos = (current_pos[0], current_pos[1]-1)
-                elif current_pos[0] > river_end[0] and current_pos[1] < river_end[1]:
-                    if(random.uniform(0, 1) < 0.5):
-                        current_pos = (current_pos[0]-1, current_pos[1])
-                    else:
-                        current_pos = (current_pos[0], current_pos[1]+1)
-                elif current_pos[0] > river_end[0] and current_pos[1] > river_end[1]:
-                    if(random.uniform(0, 1) < 0.5):
-                        current_pos = (current_pos[0]-1, current_pos[1])
-                    else:
-                        current_pos = (current_pos[0], current_pos[1]-1)
-                elif current_pos[0] < river_end[0]:
-                    current_pos = (current_pos[0]+1, current_pos[1]) # right
-                elif current_pos[1] < river_end[1]:
-                    current_pos = (current_pos[0], current_pos[1]+1) # down
-                elif current_pos[0] > river_end[0]:
-                    current_pos = (current_pos[0]-1, current_pos[1]) # left
-                elif current_pos[1] > river_end[1]:
-                    current_pos = (current_pos[0], current_pos[1]-1) # up
-            else:
-                dir = random.randint(0, 3)
-                if dir == 0:
-                    if current_pos[0] - 1 > 0:
-                        current_pos = (current_pos[0] - 1, current_pos[1])
-                elif dir == 1:
-                    if current_pos[1] - 1 > 0:
-                        current_pos = (current_pos[0], current_pos[1] - 1)
-                elif dir == 2:
-                    if current_pos[0] + 1 < self.width - 1:
-                        current_pos = (current_pos[0] + 1, current_pos[1])
-                else:
-                    if current_pos[1] - 1 < self.height - 1:
-                        current_pos = (current_pos[0], current_pos[1] + 1)
+        return pixel_mask, tiles
 
-        # Fill in final river tile
-        if(current_pos not in tiles and current_pos[0] >= 0 and current_pos[0] < self.width and current_pos[1] >= 0 and current_pos[1] < self.height):
-            tiles.add(current_pos)
+    def _rasterize_river_spline(self, px_points, radius_px, img_w, img_h):
+        if len(px_points) < 2:
+            return np.zeros((img_h, img_w), dtype=bool)
 
-        tiles_to_add = set()
-        for tile in list(tiles):
-            for t in self.get_tiles_in_radius(tile, river_width):
-                tiles_to_add.add(t)
-        tiles = tiles.union(tiles_to_add)
+        xs = np.array([p[0] for p in px_points], dtype=float)
+        ys = np.array([p[1] for p in px_points], dtype=float)
 
-        return tiles
-    
+        k = min(3, len(px_points) - 1)
+
+        try:
+            tck, u = splprep([xs, ys], s=len(px_points) * (radius_px ** 0.5), k=k)
+            num_samples = max(200, len(px_points) * 8)
+            u_new = np.linspace(0, 1, num_samples)
+            smooth_x, smooth_y = splev(u_new, tck)
+        except Exception:
+            smooth_x, smooth_y = xs, ys
+
+        mask_img = Image.new('L', (img_w, img_h), 0)
+        draw = ImageDraw.Draw(mask_img)
+
+        diameter = int(radius_px * 2)
+        pts = list(zip(smooth_x.tolist(), smooth_y.tolist()))
+
+        for i in range(len(pts) - 1):
+            x0, y0 = pts[i]
+            x1, y1 = pts[i + 1]
+            draw.line([(x0, y0), (x1, y1)], fill=255, width=diameter)
+
+        r = int(radius_px)
+        for x, y in pts[::max(1, len(pts) // 200)]:
+            draw.ellipse([x - r, y - r, x + r, y + r], fill=255)
+
+        return np.array(mask_img) > 127
+
     def distance(self, p1, p2):
         return math.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)
 
