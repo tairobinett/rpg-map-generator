@@ -44,6 +44,7 @@ class TerrainGenerator:
         terrain_texture_files = {
             TerrainType.WATER: 'water.png',
             TerrainType.GRASS: 'grass.png',
+            TerrainType.SAND:  'sand.png',
         }
 
         for terrain_type, filename in terrain_texture_files.items():
@@ -212,6 +213,28 @@ class TerrainGenerator:
         img_w = self.width * ts
         img_h = self.height * ts
 
+        # Render shore layer beneath water ---
+        shore_color = (238, 214, 175)
+        if hasattr(self, 'river_spline_points') and hasattr(self, 'river_radius_px'):
+            shore_radius_px = self.river_radius_px * 1.3  # * 1.0 = river size, want it wider than river
+            shore_mask = self._rasterize_river_spline(
+                self.river_spline_points, shore_radius_px, img_w, img_h
+            )
+
+            shore_layer = Image.new('RGB', (img_w, img_h))
+            if TerrainType.SAND in self.textures:
+                sand_tex = self.textures[TerrainType.SAND]
+                for ty in range(0, img_h, sand_tex.height):
+                    for tx in range(0, img_w, sand_tex.width):
+                        shore_layer.paste(sand_tex, (tx, ty))
+            else:
+                shore_layer.paste(shore_color, [0, 0, img_w, img_h])
+
+            shore_mask_img = Image.fromarray((shore_mask * 255).astype(np.uint8), 'L')
+            result = base_image.copy()
+            result.paste(shore_layer, (0, 0), mask=shore_mask_img)
+            base_image = result
+
         water_layer = Image.new('RGB', (img_w, img_h))
         if TerrainType.WATER in self.textures:
             water_mask_tiles = (self.terrain_grid == TerrainType.WATER)
@@ -355,6 +378,10 @@ class TerrainGenerator:
 
         river_radius_px = river_width * ts
         pixel_mask = self._rasterize_river_spline(px_points, river_radius_px, img_w, img_h)
+
+        # store for shore rendering
+        self.river_spline_points = px_points
+        self.river_radius_px = river_radius_px
 
         tiles = set()
         mask_reshaped = pixel_mask.reshape(self.height, ts, self.width, ts)
