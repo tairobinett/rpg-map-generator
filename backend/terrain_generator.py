@@ -24,7 +24,8 @@ class TerrainGenerator:
         self.tile_size = tile_size
         self.texture_folder = texture_folder
         self.asset_folder = asset_folder
-        self.foliage_tiles = []
+        self.foliage_tiles = {}   # dict: subdir_name -> set of (row, col) tiles
+        self.foliage_assets = {}  # dict: subdir_name -> list of filenames in that subdir
 
         random.seed(seed)
         np.random.seed(seed)
@@ -64,21 +65,20 @@ class TerrainGenerator:
                 print(f"Warning: Texture not found: {filepath}")
 
 
-
-    def generate_terrain(self, river_width, scale=0.1, octaves=4, foliage_coverage=0.75):
-        # Generate multi-octave noise
+    def _generate_noise_map(self, scale=0.1, octaves=4, x_offset=0, y_offset=0):
+        # Generate a normalised multi-octave noise map with given offsets
         noise_map = np.zeros((self.height, self.width))
         for octave in range(octaves):
             frequency = 2 ** octave
             amplitude = 1 / (2 ** octave)
-            xs = np.arange(self.width) * scale * frequency
-            ys = np.arange(self.height) * scale * frequency
+            xs = np.arange(self.width) * scale * frequency + x_offset
+            ys = np.arange(self.height) * scale * frequency + y_offset
             noise_map += noise2array(xs, ys) * amplitude
-
         # Normalize to 0-1 range
         noise_map = (noise_map - noise_map.min()) / (noise_map.max() - noise_map.min())
+        return noise_map
 
-        # Convert noise values to terrain types using thresholds
+    def generate_terrain(self, river_width, scale=0.1, octaves=4, foliage_coverage=0.5):
         self.terrain_grid.fill(TerrainType.GRASS)
 
         # Generate smooth pixel-space river mask and stamp water tiles from it
@@ -88,25 +88,59 @@ class TerrainGenerator:
         for tile in list(river_tiles):
             self.terrain_grid[tile[1], tile[0]] = TerrainType.WATER
 
-        # Get tiles to place foliage
-        threshold_tiles = self.get_tiles_above_threshold(noise_map, 0.5)
+        # Per-subdirectory noise maps
+        # Each subdirectory = one foliage type with its own noise map
+        # Files placed directly in asset_folder (no subdir) are ignored
+        self.foliage_tiles = {}  # dict: subdir_name -> set of (row, col)
+        self.foliage_assets = {}  # dict: subdir_name -> list of filenames in that subdir
 
-        # Get set of grass tiles, exclude any inside the river pixel mask
-        threshold_grass_tiles = set()
-        random.seed(self.seed)
-        for tile in threshold_tiles:
-            row, column = int(tile[0]), int(tile[1])
-            if self.terrain_grid[row, column] == TerrainType.GRASS:
-                # Exclude tiles with center inside river pixel mask
-                center_px = column * self.tile_size + self.tile_size // 2
-                center_py = row * self.tile_size + self.tile_size // 2
-                if 0 <= center_py < river_pixel_mask.shape[0] and 0 <= center_px < river_pixel_mask.shape[1]:
-                    if river_pixel_mask[center_py, center_px]:
+        if self.asset_folder and os.path.isdir(self.asset_folder):
+            # get subdirectories (sorted for determinism)
+            subdirs = sorted([
+                d for d in os.listdir(self.asset_folder)
+                if os.path.isdir(os.path.join(self.asset_folder, d))
+            ])
+
+            # Give each subdirectory its own independent noise offset
+            rng = random.Random(self.seed)
+            subdir_offsets = {
+                subdir: (rng.randint(0, 1_000_000), rng.randint(0, 1_000_000))
+                for subdir in subdirs
+            }
+
+            for subdir in subdirs:
+                subdir_path = os.path.join(self.asset_folder, subdir)
+                files = sorted([
+                    f for f in os.listdir(subdir_path)
+                    if os.path.isfile(os.path.join(subdir_path, f))
+                ])
+                if not files:
+                    continue
+
+                self.foliage_assets[subdir] = files
+
+                x_off, y_off = subdir_offsets[subdir]
+                noise_map = self._generate_noise_map(scale=scale, octaves=octaves,
+                                                     x_offset=x_off, y_offset=y_off)
+                candidate_tiles = self.get_tiles_above_threshold(noise_map, 0.5)
+
+                tile_set = set()
+                local_rng = random.Random(self.seed ^ hash(subdir))
+                for tile in candidate_tiles:
+                    row, col = int(tile[0]), int(tile[1])
+                    if self.terrain_grid[row, col] != TerrainType.GRASS:
                         continue
-                if random.random() <= foliage_coverage:
-                    threshold_grass_tiles.add((row, column))
+                    # Exclude tiles inside river mask
+                    center_px = col * self.tile_size + self.tile_size // 2
+                    center_py = row * self.tile_size + self.tile_size // 2
+                    if (0 <= center_py < river_pixel_mask.shape[0] and
+                            0 <= center_px < river_pixel_mask.shape[1]):
+                        if river_pixel_mask[center_py, center_px]:
+                            continue
+                    if local_rng.random() <= foliage_coverage:
+                        tile_set.add((row, col))
 
-        self.foliage_tiles = threshold_grass_tiles
+                self.foliage_tiles[subdir] = tile_set
 
         return self.terrain_grid
 
@@ -178,30 +212,40 @@ class TerrainGenerator:
             self.draw_grid(draw, img_width, img_height)
 
         # Foliage rendering
-        random.seed(self.seed)
-        asset_files = os.listdir(self.asset_folder)
-        target_size = self.tile_size
-        asset_cache = {}
-        for filename in asset_files:
-            filepath = self.asset_folder + "/" + filename
-            obj = Image.open(filepath).convert("RGBA")
-            aspect = obj.width / obj.height
-            if obj.width >= obj.height:
-                obj = obj.resize((target_size, max(1, int(target_size / aspect))), Image.LANCZOS)
-            else:
-                obj = obj.resize((max(1, int(target_size * aspect)), target_size), Image.LANCZOS)
-            asset_cache[filepath] = obj
+        if self.asset_folder and os.path.isdir(self.asset_folder) and self.foliage_tiles:
+            target_size = self.tile_size
 
-        image = image.convert("RGBA")
-        for row, column in self.foliage_tiles:
-            x_offset = random.random() - 0.5
-            y_offset = random.random() - 0.5
-            foliage_random_choice = self.asset_folder + "/" + random.choice(asset_files)
-            obj = asset_cache[foliage_random_choice]
-            px = int((column + x_offset) * self.tile_size) + (self.tile_size - obj.width) // 2
-            py = int((row + y_offset) * self.tile_size) + (self.tile_size - obj.height) // 2
-            image.paste(obj, (px, py), mask=obj)
-        image = image.convert("RGB")
+            # Pre-load and resize every asset, keyed by (subdir, filename)
+            asset_cache = {}
+            for subdir, files in self.foliage_assets.items():
+                subdir_path = os.path.join(self.asset_folder, subdir)
+                for filename in files:
+                    filepath = os.path.join(subdir_path, filename)
+                    obj = Image.open(filepath).convert("RGBA")
+                    aspect = obj.width / obj.height
+                    if obj.width >= obj.height:
+                        obj = obj.resize((target_size, max(1, int(target_size / aspect))), Image.LANCZOS)
+                    else:
+                        obj = obj.resize((max(1, int(target_size * aspect)), target_size), Image.LANCZOS)
+                    asset_cache[(subdir, filename)] = obj
+
+            image = image.convert("RGBA")
+
+            for subdir, tiles in self.foliage_tiles.items():
+                files = self.foliage_assets.get(subdir, [])
+                if not files:
+                    continue
+                local_rng = random.Random(self.seed ^ hash(subdir) ^ 0xDEADBEEF)
+                for row, col in tiles:
+                    chosen_file = local_rng.choice(files)
+                    obj = asset_cache[(subdir, chosen_file)]
+                    x_offset = local_rng.random() - 0.5
+                    y_offset = local_rng.random() - 0.5
+                    px = int((col + x_offset) * self.tile_size) + (self.tile_size - obj.width) // 2
+                    py = int((row + y_offset) * self.tile_size) + (self.tile_size - obj.height) // 2
+                    image.paste(obj, (px, py), mask=obj)
+
+            image = image.convert("RGB")
 
         return image
 
@@ -213,7 +257,7 @@ class TerrainGenerator:
         img_w = self.width * ts
         img_h = self.height * ts
 
-        # Render shore layer beneath water ---
+        # Render shore layer beneath water
         shore_color = (238, 214, 175)
         if hasattr(self, 'river_spline_points') and hasattr(self, 'river_radius_px'):
             shore_radius_px = self.river_radius_px * 1.3  # * 1.0 = river size, want it wider than river
@@ -344,7 +388,6 @@ class TerrainGenerator:
             choose_end_wall = random.randint(0, 3)
 
         def wall_point_px(wall):
-            margin = ts  # start right at the edge
             if wall == 0:   # left
                 return (0, random.randint(ts, img_h - ts))
             elif wall == 1: # top
