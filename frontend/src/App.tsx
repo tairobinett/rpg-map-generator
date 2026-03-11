@@ -8,8 +8,8 @@ function App() {
   const [message, setMessage] = useState("test")
   const [imageURL, setImageURL] = useState("")
   const [seed, setSeed] = useState("")
-  const [height, setHeight] = useState("30")
-  const [width, setWidth] = useState("30")
+  const [height, setHeight] = useState("15")
+  const [width, setWidth] = useState("15")
   const [river_width, setRiverWidth] = useState("1")
   const [grid_toggle, setGridToggle] = useState(true)
 

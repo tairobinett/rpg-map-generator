@@ -4,6 +4,7 @@ import terrain_generator as tg
 from fastapi.responses import StreamingResponse
 from io import BytesIO
 from pydantic import BaseModel
+import hashlib
 
 
 app = FastAPI()
@@ -18,7 +19,7 @@ app.add_middleware(
 )
 
 class seed_request(BaseModel): 
-    seed:int
+    seed:str
     height:int
     width:int
     river_width:int
@@ -31,7 +32,7 @@ def hello_world():
 @app.post("/generate_map")
 def generate_map(request:seed_request):
     try:
-        input_seed_int = int(request.seed)
+        input_seed = str(request.seed)
         input_height_int = int(request.height)
         input_width_int = int(request.width)
         input_river_width_int = int(request.river_width)
@@ -41,6 +42,8 @@ def generate_map(request:seed_request):
     except ValueError:
         print("Invalid input.")
         exit()
+
+    input_seed_int = int(hashlib.md5(input_seed.encode()).hexdigest(), 16) % 2**32
 
     generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128, texture_folder='textures', asset_folder='assets')
     
