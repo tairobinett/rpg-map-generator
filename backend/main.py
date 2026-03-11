@@ -23,6 +23,9 @@ class seed_request(BaseModel):
     height:int
     width:int
     river_width:int
+    flower_density:float
+    rock_density:float
+    bush_density:float
     grid:bool
 
 @app.get("/hello")
@@ -36,6 +39,9 @@ def generate_map(request:seed_request):
         input_height_int = int(request.height)
         input_width_int = int(request.width)
         input_river_width_int = int(request.river_width)
+        input_flower_density_float = float(request.flower_density) / 100
+        input_rock_density_float = float(request.rock_density) / 100
+        input_bush_density_float = float(request.bush_density) / 100
         input_grid_toggle = bool(request.grid)
         print(f"input_river_width_int value: {input_river_width_int}")
         # print(f"input_seed_int value: {input_seed_int}")
@@ -48,7 +54,8 @@ def generate_map(request:seed_request):
     generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128, texture_folder='textures', asset_folder='assets')
     
     print("Generating terrain...")
-    generator.generate_terrain(river_width=input_river_width_int, scale=0.1, octaves=4)
+    foliage_density = [input_flower_density_float, input_rock_density_float, input_bush_density_float]
+    generator.generate_terrain(river_width=input_river_width_int, foliage_density=foliage_density, scale=0.1, octaves=4)
     
     print("Rendering image...")
     image = generator.render_to_image(show_grid=input_grid_toggle)

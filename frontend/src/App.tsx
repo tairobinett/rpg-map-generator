@@ -2,6 +2,7 @@ import { useState } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
+import Slider from '@mui/material/Slider'
 
 function App() {
   const [count, setCount] = useState(0)
@@ -11,6 +12,9 @@ function App() {
   const [height, setHeight] = useState("15")
   const [width, setWidth] = useState("15")
   const [river_width, setRiverWidth] = useState("1")
+  const [flower_density, setFlowerDensity] = useState(50)
+  const [rock_density, setRockDensity] = useState(50)
+  const [bush_density, setBushDensity] = useState(50)
   const [grid_toggle, setGridToggle] = useState(true)
 
   const handleClick = async () => {
@@ -23,6 +27,18 @@ function App() {
       console.error("Error: ", e);
     }
   }
+
+  const handleSliderChangeFlower = (event: Event, newFlowerDensity: number) => {
+    setFlowerDensity(newFlowerDensity);
+  };
+
+  const handleSliderChangeRock = (event: Event, newRockDensity: number) => {
+    setRockDensity(newRockDensity);
+  };
+
+  const handleSliderChangeBush = (event: Event, newBushDensity: number) => {
+    setBushDensity(newBushDensity);
+  };
 
   const generateImage = async () => {
     try{
@@ -37,6 +53,9 @@ function App() {
           height:height,
           width:width,
           river_width:river_width,
+          flower_density:flower_density,
+          rock_density:rock_density,
+          bush_density:bush_density,
           grid:grid_toggle
         }),
       });
@@ -89,6 +108,45 @@ function App() {
           />
         </label>
       </div>
+
+      <div>
+        <label>
+          Flower density percentage: 
+          <Slider
+            size="small"
+            defaultValue={50}
+            aria-label="Small"
+            valueLabelDisplay="auto"
+            onChange={handleSliderChangeFlower}
+          />
+        </label>
+      </div>
+      <div>
+        <label>
+          Rock density percentage: 
+          <Slider
+            size="small"
+            defaultValue={50}
+            aria-label="Small"
+            valueLabelDisplay="auto"
+            onChange={handleSliderChangeRock}
+          />
+        </label>
+      </div>
+      <div>
+        <label>
+          Bush density percentage: 
+          <Slider
+            size="small"
+            defaultValue={50}
+            aria-label="Small"
+            valueLabelDisplay="auto"
+            onChange={handleSliderChangeBush}
+          />
+        </label>
+      </div>
+
+      
       <div>
         <label>
           Toggle grid<input 

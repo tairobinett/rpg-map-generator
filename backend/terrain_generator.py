@@ -78,7 +78,7 @@ class TerrainGenerator:
         noise_map = (noise_map - noise_map.min()) / (noise_map.max() - noise_map.min())
         return noise_map
 
-    def generate_terrain(self, river_width, scale=0.1, octaves=4, foliage_coverage=0.5):
+    def generate_terrain(self, river_width, foliage_density, scale=0.1, octaves=4):
         self.terrain_grid.fill(TerrainType.GRASS)
 
         # Generate smooth pixel-space river mask and stamp water tiles from it
@@ -108,7 +108,7 @@ class TerrainGenerator:
                 for subdir in subdirs
             }
 
-            for subdir in subdirs:
+            for x, subdir in enumerate(subdirs):
                 subdir_path = os.path.join(self.asset_folder, subdir)
                 files = sorted([
                     f for f in os.listdir(subdir_path)
@@ -137,7 +137,7 @@ class TerrainGenerator:
                             0 <= center_px < river_pixel_mask.shape[1]):
                         if river_pixel_mask[center_py, center_px]:
                             continue
-                    if local_rng.random() <= foliage_coverage:
+                    if local_rng.random() <= foliage_density[x]:
                         tile_set.add((row, col))
 
                 self.foliage_tiles[subdir] = tile_set
