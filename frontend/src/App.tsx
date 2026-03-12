@@ -15,6 +15,9 @@ function App() {
   const [flower_density, setFlowerDensity] = useState(50)
   const [rock_density, setRockDensity] = useState(50)
   const [bush_density, setBushDensity] = useState(50)
+  const [flower_coverage, setFlowerCoverage] = useState(50)
+  const [rock_coverage, setRockCoverage] = useState(50)
+  const [bush_coverage, setBushCoverage] = useState(50)
   const [grid_toggle, setGridToggle] = useState(true)
 
   const handleClick = async () => {
@@ -28,16 +31,27 @@ function App() {
     }
   }
 
-  const handleSliderChangeFlower = (event: Event, newFlowerDensity: number) => {
+  const handleSliderChangeFlowerD = (event: Event, newFlowerDensity: number) => {
     setFlowerDensity(newFlowerDensity);
   };
 
-  const handleSliderChangeRock = (event: Event, newRockDensity: number) => {
+  const handleSliderChangeRockD = (event: Event, newRockDensity: number) => {
     setRockDensity(newRockDensity);
   };
 
-  const handleSliderChangeBush = (event: Event, newBushDensity: number) => {
+  const handleSliderChangeBushD = (event: Event, newBushDensity: number) => {
     setBushDensity(newBushDensity);
+  };
+  const handleSliderChangeFlowerC = (event: Event, newFlowerCoverage: number) => {
+    setFlowerCoverage(newFlowerCoverage);
+  };
+
+  const handleSliderChangeRockC = (event: Event, newRockCoverage: number) => {
+    setRockCoverage(newRockCoverage);
+  };
+
+  const handleSliderChangeBushC = (event: Event, newBushCoverage: number) => {
+    setBushCoverage(newBushCoverage);
   };
 
   const generateImage = async () => {
@@ -56,6 +70,9 @@ function App() {
           flower_density:flower_density,
           rock_density:rock_density,
           bush_density:bush_density,
+          flower_coverage:flower_coverage,
+          rock_coverage:rock_coverage,
+          bush_coverage:bush_coverage,
           grid:grid_toggle
         }),
       });
@@ -84,7 +101,6 @@ function App() {
       <div>
         <label>
           Enter map width: <input 
-            name="seedInput" 
             value={width}
             onChange={e => setWidth(e.target.value)}
           />
@@ -93,7 +109,6 @@ function App() {
       <div>
         <label>
           Enter map height: <input 
-            name="seedInput" 
             value={height}
             onChange={e => setHeight(e.target.value)}
           />
@@ -102,7 +117,6 @@ function App() {
       <div>
         <label>
           Enter river width: <input 
-            name="seedInput" 
             value={river_width}
             onChange={e => setRiverWidth(e.target.value)}
           />
@@ -117,10 +131,23 @@ function App() {
             defaultValue={50}
             aria-label="Small"
             valueLabelDisplay="auto"
-            onChange={handleSliderChangeFlower}
+            onChange={handleSliderChangeFlowerD}
           />
         </label>
       </div>
+      <div>
+        <label>
+          Flower coverage percentage: 
+          <Slider
+            size="small"
+            defaultValue={50}
+            aria-label="Small"
+            valueLabelDisplay="auto"
+            onChange={handleSliderChangeFlowerC}
+          />
+        </label>
+      </div>
+
       <div>
         <label>
           Rock density percentage: 
@@ -129,10 +156,23 @@ function App() {
             defaultValue={50}
             aria-label="Small"
             valueLabelDisplay="auto"
-            onChange={handleSliderChangeRock}
+            onChange={handleSliderChangeRockD}
           />
         </label>
       </div>
+      <div>
+        <label>
+          Rock coverage percentage: 
+          <Slider
+            size="small"
+            defaultValue={50}
+            aria-label="Small"
+            valueLabelDisplay="auto"
+            onChange={handleSliderChangeRockC}
+          />
+        </label>
+      </div>
+
       <div>
         <label>
           Bush density percentage: 
@@ -141,7 +181,19 @@ function App() {
             defaultValue={50}
             aria-label="Small"
             valueLabelDisplay="auto"
-            onChange={handleSliderChangeBush}
+            onChange={handleSliderChangeBushD}
+          />
+        </label>
+      </div>
+      <div>
+        <label>
+          Bush coverage percentage: 
+          <Slider
+            size="small"
+            defaultValue={50}
+            aria-label="Small"
+            valueLabelDisplay="auto"
+            onChange={handleSliderChangeBushC}
           />
         </label>
       </div>

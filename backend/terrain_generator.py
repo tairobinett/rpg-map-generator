@@ -78,7 +78,7 @@ class TerrainGenerator:
         noise_map = (noise_map - noise_map.min()) / (noise_map.max() - noise_map.min())
         return noise_map
 
-    def generate_terrain(self, river_width, foliage_density, scale=0.1, octaves=4):
+    def generate_terrain(self, river_width, foliage_density, foliage_coverage, scale=0.1, octaves=4):
         self.terrain_grid.fill(TerrainType.GRASS)
 
         # Generate smooth pixel-space river mask and stamp water tiles from it
@@ -122,7 +122,7 @@ class TerrainGenerator:
                 x_off, y_off = subdir_offsets[subdir]
                 noise_map = self._generate_noise_map(scale=scale, octaves=octaves,
                                                      x_offset=x_off, y_offset=y_off)
-                candidate_tiles = self.get_tiles_above_threshold(noise_map, 0.5)
+                candidate_tiles = self.get_tiles_above_threshold(noise_map, foliage_coverage[x])
 
                 tile_set = set()
                 local_rng = random.Random(self.seed ^ hash(subdir))
