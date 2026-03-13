@@ -5,6 +5,8 @@ from scipy.interpolate import splprep, splev
 import random
 import math
 import os
+from dataclasses import dataclass, field
+from typing import List, Tuple, Set, Optional
 
 
 class TerrainType:
@@ -14,6 +16,18 @@ class TerrainType:
     FOREST = 3
     HILL = 4
     MOUNTAIN = 5
+    FLOOR = 6
+
+
+@dataclass
+class Building:
+    rooms: List[Tuple[int, int, int, int]] = field(default_factory=list)
+    interior_tiles: Set[Tuple[int, int]] = field(default_factory=set)
+    wall_segments: Set[Tuple[Tuple[int,int],Tuple[int,int]]] = field(default_factory=set)
+    entrance: Optional[Tuple[int, int, str]] = None
+    doors: List[Tuple[int, int, str]] = field(default_factory=list)
+    # doors: list of (row, col, side) – one per inter-room shared wall.
+    # the wall segment for each door is removed from wall_segments.
 
 
 class TerrainGenerator:
@@ -26,6 +40,7 @@ class TerrainGenerator:
         self.asset_folder = asset_folder
         self.foliage_tiles = {}   # dict: subdir_name -> set of (row, col) tiles
         self.foliage_assets = {}  # dict: subdir_name -> list of filenames in that subdir
+        self.building: Optional[Building] = None
 
         random.seed(seed)
         np.random.seed(seed)
@@ -46,6 +61,7 @@ class TerrainGenerator:
             TerrainType.WATER: 'water.png',
             TerrainType.GRASS: 'grass.png',
             TerrainType.SAND:  'sand.png',
+            TerrainType.FLOOR: 'floor.png',
         }
 
         for terrain_type, filename in terrain_texture_files.items():
@@ -78,7 +94,8 @@ class TerrainGenerator:
         noise_map = (noise_map - noise_map.min()) / (noise_map.max() - noise_map.min())
         return noise_map
 
-    def generate_terrain(self, river_width, foliage_density, foliage_coverage, scale=0.1, octaves=4):
+    def generate_terrain(self, river_width, foliage_density, foliage_coverage, scale=0.1, octaves=4,
+                         num_rooms=4, min_room_size=3, max_room_size=6):
         self.terrain_grid.fill(TerrainType.GRASS)
 
         # Generate smooth pixel-space river mask and stamp water tiles from it
@@ -87,6 +104,16 @@ class TerrainGenerator:
 
         for tile in list(river_tiles):
             self.terrain_grid[tile[1], tile[0]] = TerrainType.WATER
+
+        # Generate building
+        self.building = self.generate_building(
+            num_rooms=num_rooms,
+            min_room_size=min_room_size,
+            max_room_size=max_room_size,
+            river_tiles=river_tiles,
+        )
+        for (row, col) in self.building.interior_tiles:
+            self.terrain_grid[row, col] = TerrainType.FLOOR
 
         # Per-subdirectory noise maps
         # Each subdirectory = one foliage type with its own noise map
@@ -144,6 +171,243 @@ class TerrainGenerator:
 
         return self.terrain_grid
 
+    # building generation
+    def generate_building(self, num_rooms: int, min_room_size: int, max_room_size: int,
+                          river_tiles: set) -> Building:
+        bld_rng = random.Random(self.seed ^ 0xB01D1)
+
+        margin = 1  # tile border kept clear around the whole map
+
+        # river_tiles are stored as (col, row) by generate_river — normalise
+        # to (row, col) and expand by 1-tile buffer so rooms don't touch water.
+        forbidden: Set[Tuple[int,int]] = set()
+        for (col, row) in river_tiles:
+            for dr in range(-1, 2):
+                for dc in range(-1, 2):
+                    nr, nc = row + dr, col + dc
+                    if 0 <= nr < self.height and 0 <= nc < self.width:
+                        forbidden.add((nr, nc))
+
+        rooms: List[Tuple[int,int,int,int]] = []
+
+        # place first room
+        for _ in range(200):
+            w = bld_rng.randint(min_room_size, max_room_size)
+            h = bld_rng.randint(min_room_size, max_room_size)
+            col = bld_rng.randint(margin, self.width  - w - margin)
+            row = bld_rng.randint(margin, self.height - h - margin)
+            if not self._room_conflicts(col, row, w, h, rooms, forbidden):
+                rooms.append((col, row, w, h))
+                break
+
+        if not rooms:
+            # could not place even one room
+            return Building()
+
+        # accrete additional rooms
+        for _ in range(num_rooms - 1):
+            placed = False
+            # Shuffle attempt order so result varies
+            room_order = list(range(len(rooms)))
+            bld_rng.shuffle(room_order)
+            for ri in room_order:
+                parent = rooms[ri]
+                new_room = self._try_attach_room(
+                    parent, rooms, forbidden, bld_rng,
+                    min_room_size, max_room_size, margin
+                )
+                if new_room:
+                    rooms.append(new_room)
+                    placed = True
+                    break
+
+        # collect interior tiles
+        interior: Set[Tuple[int,int]] = set()
+        # (row, col) -> room index
+        tile_room: dict = {}
+        for idx, (col, row, w, h) in enumerate(rooms):
+            for r in range(row, row + h):
+                for c in range(col, col + w):
+                    interior.add((r, c))
+                    tile_room[(r, c)] = idx
+
+        # build wall segments (grid-line coords)
+        # Segments appear on: outer boundary AND shared edges between rooms.
+        walls = self._compute_wall_segments(interior, tile_room)
+
+        # pick entrance on the first room's outermost wall
+        entrance = self._pick_entrance(rooms[0], interior, walls, bld_rng)
+
+        # cut one door opening per inter-room shared wall
+        doors = self._pick_inter_room_doors(rooms, tile_room, walls, bld_rng)
+
+        return Building(
+            rooms=rooms,
+            interior_tiles=interior,
+            wall_segments=walls,
+            entrance=entrance,
+            doors=doors,
+        )
+
+    def _room_conflicts(self, col, row, w, h,
+                        existing_rooms, forbidden_tiles) -> bool:
+        # return true if overlaps existing room or forbidden tile
+        for r in range(row, row + h):
+            for c in range(col, col + w):
+                if (r, c) in forbidden_tiles:
+                    return True
+        for (ec, er, ew, eh) in existing_rooms:
+            # Rectangles overlap if they are not separated on any axis
+            if not (col >= ec + ew or col + w <= ec or
+                    row >= er + eh or row + h <= er):
+                return True
+        return False
+
+    def _try_attach_room(self, parent, all_rooms, forbidden, rng,
+                         min_size, max_size, margin) -> Optional[Tuple[int,int,int,int]]:
+        pc, pr, pw, ph = parent
+        sides = ['N', 'S', 'E', 'W']
+        rng.shuffle(sides)
+
+        for side in sides:
+            for _ in range(40):
+                if side in ('N', 'S'):
+                    # New room shares a horizontal wall: same width axis
+                    nw = rng.randint(min_size, max_size)
+                    nh = rng.randint(min_size, max_size)
+                    # Overlap on the shared wall axis: at least min_size tiles
+                    overlap = rng.randint(min_size, max(min_size, min(pw, nw)))
+                    # Align: shared wall tiles start at nc, nc+overlap-1
+                    nc = rng.randint(pc - nw + overlap, pc + pw - overlap)
+                    if side == 'N':
+                        # new room is above
+                        nr = pr - nh
+                    else:
+                        # new room is below
+                        nr = pr + ph
+                else: # E/W
+                    nw = rng.randint(min_size, max_size)
+                    nh = rng.randint(min_size, max_size)
+                    overlap = rng.randint(min_size, max(min_size, min(ph, nh)))
+                    nr = rng.randint(pr - nh + overlap, pr + ph - overlap)
+                    if side == 'W':
+                        nc = pc - nw
+                    else:
+                        nc = pc + pw
+
+                # Bounds check
+                if (nc < margin or nr < margin or
+                        nc + nw > self.width  - margin or
+                        nr + nh > self.height - margin):
+                    continue
+
+                if not self._room_conflicts(nc, nr, nw, nh, all_rooms, forbidden):
+                    return (nc, nr, nw, nh) # col, row, w, h
+        return None
+
+    def _compute_wall_segments(
+            self, interior: Set[Tuple[int,int]], tile_room: dict
+    ) -> Set[Tuple[Tuple[int,int],Tuple[int,int]]]:
+        """
+        Return wall segments for:
+          - the outer boundary of the building (neighbour is outside)
+          - shared edges between two *different* rooms (room dividers)
+
+        Grid point (gx, gy) maps to pixel (gx * tile_size, gy * tile_size).
+        """
+        # return wall segments for outer boundary of building and shared edges of different rooms
+        walls: Set[Tuple[Tuple[int,int],Tuple[int,int]]] = set()
+        for (row, col) in interior:
+            my_room = tile_room[(row, col)]
+
+            def _want_wall(neighbour):
+                if neighbour not in interior:
+                    return True  # outer boundary
+                return tile_room[neighbour] != my_room  # room divider
+
+            # North edge
+            if _want_wall((row - 1, col)):
+                walls.add(((col, row),   (col+1, row)))
+            # South edge
+            if _want_wall((row + 1, col)):
+                walls.add(((col, row+1), (col+1, row+1)))
+            # West edge
+            if _want_wall((row, col - 1)):
+                walls.add(((col, row),   (col, row+1)))
+            # East edge
+            if _want_wall((row, col + 1)):
+                walls.add(((col+1, row), (col+1, row+1)))
+        return walls
+
+    def _pick_entrance(self, first_room, interior, walls, rng
+                       ) -> Optional[Tuple[int,int,str]]:
+        # pick one wall segment on outside of first room
+        # remove chosen wall segment from walls set
+        # returns (row, col, side) for entrance tile
+        fc, fr, fw, fh = first_room
+        # Collect candidate (tile, side, segment) triples from outer edges
+        candidates = []
+        for row in range(fr, fr + fh):
+            for col in range(fc, fc + fw):
+                for side, seg in [
+                    ('N', ((col, row),   (col+1, row))),
+                    ('S', ((col, row+1), (col+1, row+1))),
+                    ('W', ((col, row),   (col, row+1))),
+                    ('E', ((col+1, row), (col+1, row+1))),
+                ]:
+                    if seg in walls:
+                        # It's an outer wall segment
+                        outside_tile = {
+                            'N': (row - 1, col),
+                            'S': (row + 1, col),
+                            'W': (row, col - 1),
+                            'E': (row, col + 1),
+                        }[side]
+                        if outside_tile not in interior:
+                            candidates.append((row, col, side, seg))
+
+        if not candidates:
+            return None
+
+        row, col, side, seg = rng.choice(candidates)
+        walls.discard(seg)
+        return (row, col, side)
+
+    def _pick_inter_room_doors(self, rooms, tile_room, walls, rng
+                               ) -> List[Tuple[int,int,str]]:
+        # for each pair of adjacent rooms, collect wall aegments on shared boundary, pick one, remove from walls set, replace with door
+        # returns list of (row, col, side) door descriptors, 1 per adjacent room pair.
+        # side is based on lower index room's perspective
+        doors: List[Tuple[int,int,str]] = []
+
+        num_rooms = len(rooms)
+        # Find all adjacent room pairs (each pair handled once)
+        for i in range(num_rooms):
+            for j in range(i + 1, num_rooms):
+                # Collect segments that sit between room i and room j
+                shared_segs = []
+                ci, ri, wi, hi = rooms[i]
+                for row in range(ri, ri + hi):
+                    for col in range(ci, ci + wi):
+                        for side, seg, nbr in [
+                            ('N', ((col, row),   (col+1, row)),   (row-1, col)),
+                            ('S', ((col, row+1), (col+1, row+1)), (row+1, col)),
+                            ('W', ((col, row),   (col, row+1)),   (row, col-1)),
+                            ('E', ((col+1, row), (col+1, row+1)), (row, col+1)),
+                        ]:
+                            if seg in walls and tile_room.get(nbr) == j:
+                                shared_segs.append((row, col, side, seg))
+
+                if not shared_segs:
+                    continue  # rooms i and j don't share a wall
+
+                row, col, side, seg = rng.choice(shared_segs)
+                walls.discard(seg)
+                doors.append((row, col, side))
+
+        return doors
+
+
     def noise_to_terrain(self, noise_map):
         terrain = np.zeros_like(noise_map, dtype=int)
 
@@ -171,6 +435,7 @@ class TerrainGenerator:
             TerrainType.FOREST:     (34, 139, 34),
             TerrainType.HILL:       (139, 90, 43),
             TerrainType.MOUNTAIN:   (105, 105, 105),
+            TerrainType.FLOOR:      (180, 160, 130),
         }
 
         # Render all tiles as grass first
@@ -247,6 +512,81 @@ class TerrainGenerator:
 
             image = image.convert("RGB")
 
+        image = self._render_building_walls(image)
+
+        return image
+
+    def _render_building_walls(self, image: Image.Image) -> Image.Image:
+        if not self.building or not self.building.wall_segments:
+            return image
+
+        ts = self.tile_size
+        # pixels wide/tall for fallback lines
+        wall_thickness = max(6, ts // 10)
+
+        # try to load wall assets
+        wall_images: dict = {}
+        if self.texture_folder:
+            walls_dir = os.path.join(self.texture_folder, 'walls')
+            if os.path.isdir(walls_dir):
+                wall_files = sorted([
+                    f for f in os.listdir(walls_dir)
+                    if f.lower().endswith('.png') and
+                       os.path.isfile(os.path.join(walls_dir, f))
+                ])
+                if wall_files:
+                    raw = Image.open(
+                        os.path.join(walls_dir, wall_files[0])
+                    ).convert('RGBA')
+                    # Horizontal: tile_size wide, wall_thickness tall
+                    wall_h = raw.resize((ts, wall_thickness), Image.LANCZOS)
+                    # Vertical: wall_thickness wide, tile_size tall
+                    wall_v = raw.rotate(90, expand=True).resize(
+                        (wall_thickness, ts), Image.LANCZOS
+                    )
+                    wall_images['H'] = wall_h
+                    wall_images['V'] = wall_v
+
+        image = image.convert('RGBA')
+        draw = ImageDraw.Draw(image)
+        fallback_color = (60, 40, 20, 255)
+
+        for seg in self.building.wall_segments:
+            (gx0, gy0), (gx1, gy1) = seg
+            px0, py0 = gx0 * ts, gy0 * ts
+            px1, py1 = gx1 * ts, gy1 * ts
+
+            # both ends at same grid-y: horizontal wall
+            is_horizontal = (gy0 == gy1)
+            mid_x = (px0 + px1) // 2
+            mid_y = (py0 + py1) // 2
+
+            if is_horizontal:
+                if 'H' in wall_images:
+                    wimg = wall_images['H']
+                    paste_x = min(px0, px1)
+                    paste_y = mid_y - wall_thickness // 2
+                    image.paste(wimg, (paste_x, paste_y), mask=wimg)
+                else:
+                    half = wall_thickness // 2
+                    draw.rectangle(
+                        [min(px0, px1), mid_y - half, max(px0, px1), mid_y + half],
+                        fill=fallback_color
+                    )
+            else:  # vertical
+                if 'V' in wall_images:
+                    wimg = wall_images['V']
+                    paste_x = mid_x - wall_thickness // 2
+                    paste_y = min(py0, py1)
+                    image.paste(wimg, (paste_x, paste_y), mask=wimg)
+                else:
+                    half = wall_thickness // 2
+                    draw.rectangle(
+                        [mid_x - half, min(py0, py1), mid_x + half, max(py0, py1)],
+                        fill=fallback_color
+                    )
+
+        image = image.convert('RGB')
         return image
 
     def _render_smooth_water(self, base_image, colors):
