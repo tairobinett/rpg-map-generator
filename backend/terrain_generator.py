@@ -614,7 +614,78 @@ class TerrainGenerator:
                         fill=fallback_color
                     )
 
+        image = self._render_doors(image)
+
         image = image.convert('RGB')
+        return image
+
+    def _render_doors(self, image: Image.Image) -> Image.Image:
+        if not self.building:
+            return image
+
+        all_doors = []
+        if self.building.entrance:
+            all_doors.append(self.building.entrance)
+        all_doors.extend(self.building.doors)
+
+        if not all_doors:
+            return image
+
+        ts = self.tile_size
+
+        # Load door asset - look for files with 'door' in the name
+        door_raw = None
+        if self.building_folder and os.path.isdir(self.building_folder):
+            door_files = sorted([
+                f for f in os.listdir(self.building_folder)
+                if f.lower().endswith('.png') and
+                   os.path.isfile(os.path.join(self.building_folder, f)) and
+                   'door' in f.lower()
+            ])
+            if door_files:
+                door_raw = Image.open(
+                    os.path.join(self.building_folder, door_files[0])
+                ).convert('RGBA')
+
+        if door_raw is None:
+            return image
+
+        raw_w, raw_h = door_raw.size
+        long = max(raw_w, raw_h)
+        short = min(raw_w, raw_h)
+        scale_long = ts * 2
+        scale_short = max(1, round(scale_long * short / long))
+
+        if raw_w > raw_h:
+            door_raw = door_raw.rotate(90, expand=True)
+
+        door_h = door_raw.resize((scale_short, scale_long), Image.LANCZOS)
+        door_v = door_raw.rotate(90, expand=True).resize((scale_long, scale_short), Image.LANCZOS)
+
+        image = image.convert('RGBA')
+
+        for (row, col, side) in all_doors:
+            if side == 'N':
+                line_x = col * ts + ts // 2
+                line_y = row * ts
+                dimg = door_h
+            elif side == 'S':
+                line_x = col * ts + ts // 2
+                line_y = (row + 1) * ts
+                dimg = door_h
+            elif side == 'W':
+                line_x = col * ts
+                line_y = row * ts + ts // 2
+                dimg = door_v
+            else:  # 'E'
+                line_x = (col + 1) * ts
+                line_y = row * ts + ts // 2
+                dimg = door_v
+
+            paste_x = line_x - dimg.width // 2
+            paste_y = line_y - dimg.height // 2
+            image.paste(dimg, (paste_x, paste_y), mask=dimg)
+
         return image
 
     def _render_smooth_water(self, base_image, colors):
