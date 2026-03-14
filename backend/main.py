@@ -57,7 +57,7 @@ def generate_map(request:seed_request):
 
     input_seed_int = int(hashlib.md5(input_seed.encode()).hexdigest(), 16) % 2**32
 
-    generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128, texture_folder='textures', asset_folder='assets')
+    generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128, texture_folder='assets/ground_textures', foliage_folder='assets/foliage_and_objects', building_folder='assets/buildings')
     
     print("Generating terrain...")
     foliage_density = [input_flower_density_float, input_rock_density_float, input_bush_density_float]

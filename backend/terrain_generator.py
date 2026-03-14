@@ -31,13 +31,14 @@ class Building:
 
 
 class TerrainGenerator:
-    def __init__(self, width, height, seed, tile_size=128, texture_folder=None, asset_folder=None):
+    def __init__(self, width, height, seed, tile_size=128, texture_folder=None, foliage_folder=None, building_folder=None):
         self.width = width
         self.height = height
         self.seed = seed
         self.tile_size = tile_size
         self.texture_folder = texture_folder
-        self.asset_folder = asset_folder
+        self.foliage_folder = foliage_folder
+        self.building_folder = building_folder
         self.foliage_tiles = {}   # dict: subdir_name -> set of (row, col) tiles
         self.foliage_assets = {}  # dict: subdir_name -> list of filenames in that subdir
         self.building: Optional[Building] = None
@@ -117,15 +118,15 @@ class TerrainGenerator:
 
         # Per-subdirectory noise maps
         # Each subdirectory = one foliage type with its own noise map
-        # Files placed directly in asset_folder (no subdir) are ignored
+        # Files placed directly in foliage_folder (no subdir) are ignored
         self.foliage_tiles = {}  # dict: subdir_name -> set of (row, col)
         self.foliage_assets = {}  # dict: subdir_name -> list of filenames in that subdir
 
-        if self.asset_folder and os.path.isdir(self.asset_folder):
+        if self.foliage_folder and os.path.isdir(self.foliage_folder):
             # get subdirectories (sorted for determinism)
             subdirs = sorted([
-                d for d in os.listdir(self.asset_folder)
-                if os.path.isdir(os.path.join(self.asset_folder, d))
+                d for d in os.listdir(self.foliage_folder)
+                if os.path.isdir(os.path.join(self.foliage_folder, d))
             ])
 
             # Give each subdirectory its own independent noise offset
@@ -136,7 +137,7 @@ class TerrainGenerator:
             }
 
             for x, subdir in enumerate(subdirs):
-                subdir_path = os.path.join(self.asset_folder, subdir)
+                subdir_path = os.path.join(self.foliage_folder, subdir)
                 files = sorted([
                     f for f in os.listdir(subdir_path)
                     if os.path.isfile(os.path.join(subdir_path, f))
@@ -477,13 +478,13 @@ class TerrainGenerator:
             self.draw_grid(draw, img_width, img_height)
 
         # Foliage rendering
-        if self.asset_folder and os.path.isdir(self.asset_folder) and self.foliage_tiles:
+        if self.foliage_folder and os.path.isdir(self.foliage_folder) and self.foliage_tiles:
             target_size = self.tile_size
 
             # Pre-load and resize every asset, keyed by (subdir, filename)
             asset_cache = {}
             for subdir, files in self.foliage_assets.items():
-                subdir_path = os.path.join(self.asset_folder, subdir)
+                subdir_path = os.path.join(self.foliage_folder, subdir)
                 for filename in files:
                     filepath = os.path.join(subdir_path, filename)
                     obj = Image.open(filepath).convert("RGBA")
@@ -512,6 +513,19 @@ class TerrainGenerator:
 
             image = image.convert("RGB")
 
+        # Re-stamp floor tiles over foliage so building interiors are never obscured
+        if TerrainType.FLOOR in self.textures:
+            floor_mask = (self.terrain_grid == TerrainType.FLOOR)
+            rows, cols = np.where(floor_mask)
+            for row, col in zip(rows, cols):
+                px, py = col * self.tile_size, row * self.tile_size
+                texture_tile = self.draw_tile(None, px, py, (180, 160, 130), TerrainType.FLOOR, tile_x=col, tile_y=row)
+                if texture_tile:
+                    image.paste(texture_tile, (px, py))
+                else:
+                    draw = ImageDraw.Draw(image)
+                    draw.rectangle([px, py, px + self.tile_size, py + self.tile_size], fill=(180, 160, 130))
+
         image = self._render_building_walls(image)
 
         return image
@@ -521,31 +535,40 @@ class TerrainGenerator:
             return image
 
         ts = self.tile_size
-        # pixels wide/tall for fallback lines
-        wall_thickness = max(6, ts // 10)
+        # Wall visually spans a full tile, centered on the grid line
+        wall_thickness = ts
+        fallback_px = max(6, ts // 10)  # only used when no asset is loaded
 
-        # try to load wall assets
         wall_images: dict = {}
-        if self.texture_folder:
-            walls_dir = os.path.join(self.texture_folder, 'walls')
-            if os.path.isdir(walls_dir):
-                wall_files = sorted([
-                    f for f in os.listdir(walls_dir)
-                    if f.lower().endswith('.png') and
-                       os.path.isfile(os.path.join(walls_dir, f))
-                ])
-                if wall_files:
-                    raw = Image.open(
-                        os.path.join(walls_dir, wall_files[0])
-                    ).convert('RGBA')
-                    # Horizontal: tile_size wide, wall_thickness tall
-                    wall_h = raw.resize((ts, wall_thickness), Image.LANCZOS)
-                    # Vertical: wall_thickness wide, tile_size tall
-                    wall_v = raw.rotate(90, expand=True).resize(
-                        (wall_thickness, ts), Image.LANCZOS
-                    )
-                    wall_images['H'] = wall_h
-                    wall_images['V'] = wall_v
+        if self.building_folder and os.path.isdir(self.building_folder):
+            wall_files = sorted([
+                f for f in os.listdir(self.building_folder)
+                if f.lower().endswith('.png') and
+                   os.path.isfile(os.path.join(self.building_folder, f)) and
+                   'wall' in f.lower()
+            ])
+            if wall_files:
+                raw = Image.open(
+                    os.path.join(self.building_folder, wall_files[0])
+                ).convert('RGBA')
+                raw_w, raw_h = raw.size  # e.g. 3x2 tiles -> wider than tall
+
+                # The asset has transparent padding so the visible wall only occupies
+                # ~half the image width. Scale the long axis to 2.5*ts so the visible
+                # portion fills one tile segment; thickness follows naturally.
+                h_w = round(ts * 2.5)
+                h_h = max(1, round(h_w * raw_h / raw_w))
+                wall_h = raw.resize((h_w, h_h), Image.LANCZOS)
+
+                # Vertical wall: rotate 90 degrees so the long axis becomes vertical,
+                # then apply the same 2.5*ts scaling on the long axis.
+                raw_rot = raw.rotate(90, expand=True)  # now taller than wide
+                v_h = round(ts * 2.5)
+                v_w = max(1, round(v_h * raw_rot.width / raw_rot.height))
+                wall_v = raw_rot.resize((v_w, v_h), Image.LANCZOS)
+
+                wall_images['H'] = wall_h
+                wall_images['V'] = wall_v
 
         image = image.convert('RGBA')
         draw = ImageDraw.Draw(image)
@@ -556,33 +579,38 @@ class TerrainGenerator:
             px0, py0 = gx0 * ts, gy0 * ts
             px1, py1 = gx1 * ts, gy1 * ts
 
-            # both ends at same grid-y: horizontal wall
+            # Horizontal wall: both grid points share the same grid-y
             is_horizontal = (gy0 == gy1)
-            mid_x = (px0 + px1) // 2
-            mid_y = (py0 + py1) // 2
+            # Grid-line pixel coordinate (the border itself)
+            line_x = min(px0, px1)
+            line_y = min(py0, py1)
 
             if is_horizontal:
+                # Center both axes on the grid line/segment midpoint
                 if 'H' in wall_images:
                     wimg = wall_images['H']
-                    paste_x = min(px0, px1)
-                    paste_y = mid_y - wall_thickness // 2
+                    seg_mid_x = line_x + ts // 2
+                    paste_x = seg_mid_x - wimg.width // 2
+                    paste_y = line_y - wimg.height // 2
                     image.paste(wimg, (paste_x, paste_y), mask=wimg)
                 else:
-                    half = wall_thickness // 2
+                    half = fallback_px // 2
                     draw.rectangle(
-                        [min(px0, px1), mid_y - half, max(px0, px1), mid_y + half],
+                        [line_x, line_y - half, line_x + ts, line_y + half],
                         fill=fallback_color
                     )
-            else:  # vertical
+            else:  # vertical wall
+                # Center both axes on the grid line/segment midpoint
                 if 'V' in wall_images:
                     wimg = wall_images['V']
-                    paste_x = mid_x - wall_thickness // 2
-                    paste_y = min(py0, py1)
+                    seg_mid_y = line_y + ts // 2
+                    paste_x = line_x - wimg.width // 2
+                    paste_y = seg_mid_y - wimg.height // 2
                     image.paste(wimg, (paste_x, paste_y), mask=wimg)
                 else:
-                    half = wall_thickness // 2
+                    half = fallback_px // 2
                     draw.rectangle(
-                        [mid_x - half, min(py0, py1), mid_x + half, max(py0, py1)],
+                        [line_x - half, line_y, line_x + half, line_y + ts],
                         fill=fallback_color
                     )
 
