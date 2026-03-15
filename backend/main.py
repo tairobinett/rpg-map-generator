@@ -23,6 +23,7 @@ class seed_request(BaseModel):
     height:int
     width:int
     river_width:int
+    road_width:int
     flower_density:float
     rock_density:float
     bush_density:float
@@ -42,6 +43,7 @@ def generate_map(request:seed_request):
         input_height_int = int(request.height)
         input_width_int = int(request.width)
         input_river_width_int = int(request.river_width)
+        input_road_width_int = int(request.road_width)
         input_flower_density_float = float(request.flower_density) / 100
         input_rock_density_float = float(request.rock_density) / 100
         input_bush_density_float = float(request.bush_density) / 100
@@ -62,7 +64,7 @@ def generate_map(request:seed_request):
     print("Generating terrain...")
     foliage_density = [input_flower_density_float, input_rock_density_float, input_bush_density_float]
     foliage_coverage = [input_flower_coverage_float, input_rock_coverage_float, input_bush_coverage_float]
-    generator.generate_terrain(river_width=input_river_width_int, foliage_density=foliage_density, foliage_coverage=foliage_coverage, scale=0.1, octaves=4)
+    generator.generate_terrain(river_width=input_river_width_int, road_width=input_road_width_int, foliage_density=foliage_density, foliage_coverage=foliage_coverage, scale=0.1, octaves=4)
     
     print("Rendering image...")
     image = generator.render_to_image(show_grid=input_grid_toggle)

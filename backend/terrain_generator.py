@@ -42,6 +42,9 @@ class TerrainGenerator:
         self.foliage_tiles = {}   # dict: subdir_name -> set of (row, col) tiles
         self.foliage_assets = {}  # dict: subdir_name -> list of filenames in that subdir
         self.building: Optional[Building] = None
+        self.road_pixel_mask: Optional[np.ndarray] = None
+        self.road_spline_points: Optional[list] = None
+        self.road_radius_px: int = 0
 
         random.seed(seed)
         np.random.seed(seed)
@@ -81,6 +84,20 @@ class TerrainGenerator:
             else:
                 print(f"Warning: Texture not found: {filepath}")
 
+        road_filepath = os.path.join(self.texture_folder, 'road.png')
+        if os.path.exists(road_filepath):
+            road_tex = Image.open(road_filepath).convert('RGB')
+            if road_tex.width < self.tile_size or road_tex.height < self.tile_size:
+                new_size = max(self.tile_size, road_tex.width, road_tex.height)
+                tiled = Image.new('RGB', (new_size, new_size))
+                for y in range(0, new_size, road_tex.height):
+                    for x in range(0, new_size, road_tex.width):
+                        tiled.paste(road_tex, (x, y))
+                road_tex = tiled
+            self.textures['road'] = road_tex
+        else:
+            print(f"Warning: Road texture not found: {road_filepath}")
+
 
     def _generate_noise_map(self, scale=0.1, octaves=4, x_offset=0, y_offset=0):
         # Generate a normalised multi-octave noise map with given offsets
@@ -96,7 +113,7 @@ class TerrainGenerator:
         return noise_map
 
     def generate_terrain(self, river_width, foliage_density, foliage_coverage, scale=0.1, octaves=4,
-                         num_rooms=4, min_room_size=3, max_room_size=6):
+                         num_rooms=4, min_room_size=3, max_room_size=6, road_width=1):
         self.terrain_grid.fill(TerrainType.GRASS)
 
         # Generate smooth pixel-space river mask and stamp water tiles from it
@@ -115,6 +132,10 @@ class TerrainGenerator:
         )
         for (row, col) in self.building.interior_tiles:
             self.terrain_grid[row, col] = TerrainType.FLOOR
+
+        # Generate road from a map edge to the building entrance, or across map if there is no building
+        road_pixel_mask, road_tiles = self.generate_road(road_width=road_width)
+        self.road_pixel_mask = road_pixel_mask
 
         # Per-subdirectory noise maps
         # Each subdirectory = one foliage type with its own noise map
@@ -164,6 +185,12 @@ class TerrainGenerator:
                     if (0 <= center_py < river_pixel_mask.shape[0] and
                             0 <= center_px < river_pixel_mask.shape[1]):
                         if river_pixel_mask[center_py, center_px]:
+                            continue
+                    # Exclude tiles inside road mask
+                    if (self.road_pixel_mask is not None and
+                            0 <= center_py < self.road_pixel_mask.shape[0] and
+                            0 <= center_px < self.road_pixel_mask.shape[1]):
+                        if self.road_pixel_mask[center_py, center_px]:
                             continue
                     if local_rng.random() <= foliage_density[x]:
                         tile_set.add((row, col))
@@ -473,6 +500,8 @@ class TerrainGenerator:
 
         image = self._render_smooth_water(image, colors)
 
+        image = self._render_road(image)
+
         if show_grid:
             draw = ImageDraw.Draw(image)
             self.draw_grid(draw, img_width, img_height)
@@ -688,6 +717,31 @@ class TerrainGenerator:
 
         return image
 
+    def _render_road(self, base_image: Image.Image) -> Image.Image:
+        if self.road_pixel_mask is None:
+            return base_image
+
+        ts = self.tile_size
+        img_w = self.width * ts
+        img_h = self.height * ts
+
+        road_color = (160, 120, 70)
+
+        if 'road' in self.textures:
+            road_tex = self.textures['road']
+            road_layer = Image.new('RGB', (img_w, img_h))
+            for ty in range(0, img_h, road_tex.height):
+                for tx in range(0, img_w, road_tex.width):
+                    road_layer.paste(road_tex, (tx, ty))
+        else:
+            road_layer = Image.new('RGB', (img_w, img_h), road_color)
+
+        road_mask_img = Image.fromarray((self.road_pixel_mask * 255).astype(np.uint8), 'L')
+        result = base_image.copy()
+        result.paste(road_layer, (0, 0), mask=road_mask_img)
+
+        return result
+
     def _render_smooth_water(self, base_image, colors):
         if not hasattr(self, 'river_pixel_mask') or self.river_pixel_mask is None:
             return base_image
@@ -873,6 +927,119 @@ class TerrainGenerator:
             tiles.add((c, r))
 
         return pixel_mask, tiles
+
+    def generate_road(self, road_width: int = 1):
+        ts = self.tile_size
+        img_w = self.width * ts
+        img_h = self.height * ts
+
+        road_rng = random.Random(self.seed ^ 0xC0FFEE)
+        road_half_w = max(ts // 4, road_width * ts // 2)  # pixel half-width of road
+
+        if self.building and self.building.entrance:
+            row, col, side = self.building.entrance
+
+            # Pixel coordinate just outside the entrance wall
+            entrance_px = {
+                'N': (col * ts + ts // 2, row * ts),
+                'S': (col * ts + ts // 2, (row + 1) * ts),
+                'W': (col * ts,           row * ts + ts // 2),
+                'E': ((col + 1) * ts,     row * ts + ts // 2),
+            }[side]
+            ex, ey = entrance_px
+
+            # Bounding box of the entire building in pixels, expanded by a clearance
+            clearance = ts * 2
+            all_cols = [c for (c, r, w, h) in self.building.rooms for c in (c, c + w)]
+            all_rows = [r for (c, r, w, h) in self.building.rooms for r in (r, r + h)]
+            bld_x0 = min(all_cols) * ts - clearance
+            bld_x1 = max(all_cols) * ts + clearance
+            bld_y0 = min(all_rows) * ts - clearance
+            bld_y1 = max(all_rows) * ts + clearance
+
+            # Choose the map edge the road arrives from.
+            # Prefer the edge that is directly "behind" the entrance so the
+            # approach segment is the short perpendicular one and the long
+            # segment runs parallel past the building's side.
+            approach = {
+                'N': 1,   # entrance faces north: come from top edge
+                'S': 3,   # entrance faces south: come from bottom edge
+                'W': 0,   # entrance faces west: come from left edge
+                'E': 2,   # entrance faces east: come from right edge
+            }[side]
+
+            # Start point on that map edge, aligned to the entrance on the
+            # perpendicular axis so the first segment is perfectly straight.
+            if approach == 0:   # left edge  – road runs horizontally first
+                start_px = (0, ey)
+                # Corner: same Y as entrance, X just left of building bbox
+                corner_px = (bld_x0, ey)
+            elif approach == 2: # right edge
+                start_px = (img_w, ey)
+                corner_px = (bld_x1, ey)
+            elif approach == 1: # top edge
+                start_px = (ex, 0)
+                corner_px = (ex, bld_y0)
+            else:               # bottom edge
+                start_px = (ex, img_h)
+                corner_px = (ex, bld_y1)
+
+            # If start and corner line up with the entrance, drop the corner to keep it a single segment.
+            if corner_px == entrance_px or corner_px == start_px:
+                px_points = [start_px, entrance_px]
+            else:
+                px_points = [start_px, corner_px, entrance_px]
+
+        else:
+            choose_start_wall = road_rng.randint(0, 3)
+            # Pick opposite wall for a straight crossing
+            choose_end_wall = (choose_start_wall + 2) % 4
+
+            def wall_point_px(wall, coord):
+                if wall == 0:   return (0,      coord)
+                elif wall == 1: return (coord,  0)
+                elif wall == 2: return (img_w,  coord)
+                else:           return (coord,  img_h)
+
+            if choose_start_wall in (0, 2): # left/right – horizontal road
+                y = road_rng.randint(ts, img_h - ts)
+                start_px = wall_point_px(choose_start_wall, y)
+                end_px   = wall_point_px(choose_end_wall,   y)
+            else: # top/bottom – vertical road
+                x = road_rng.randint(ts, img_w - ts)
+                start_px = wall_point_px(choose_start_wall, x)
+                end_px   = wall_point_px(choose_end_wall,   x)
+
+            px_points = [start_px, end_px]
+
+        # store for renderer
+        self.road_spline_points = px_points
+        self.road_radius_px = road_half_w
+
+        pixel_mask = self._rasterize_straight_road(px_points, road_half_w, img_w, img_h)
+
+        tiles: Set[Tuple[int, int]] = set()
+        mask_reshaped = pixel_mask.reshape(self.height, ts, self.width, ts)
+        tile_covered = mask_reshaped.any(axis=(1, 3))
+        rows, cols = np.where(tile_covered)
+        for r, c in zip(rows, cols):
+            tiles.add((c, r))
+
+        return pixel_mask, tiles
+
+    def _rasterize_straight_road(self, px_points, half_width, img_w, img_h):
+        """Rasterise a sequence of straight (H/V) line segments into a bool mask."""
+        mask_img = Image.new('L', (img_w, img_h), 0)
+        draw = ImageDraw.Draw(mask_img)
+        diameter = int(half_width * 2)
+        for i in range(len(px_points) - 1):
+            x0, y0 = px_points[i]
+            x1, y1 = px_points[i + 1]
+            draw.line([(x0, y0), (x1, y1)], fill=255, width=diameter)
+        r = int(half_width)
+        for x, y in px_points:
+            draw.ellipse([x - r, y - r, x + r, y + r], fill=255)
+        return np.array(mask_img) > 127
 
     def _rasterize_river_spline(self, px_points, radius_px, img_w, img_h):
         if len(px_points) < 2:

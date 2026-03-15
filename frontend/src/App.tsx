@@ -12,6 +12,7 @@ function App() {
   const [height, setHeight] = useState("15")
   const [width, setWidth] = useState("15")
   const [river_width, setRiverWidth] = useState("1")
+  const [road_width, setRoadWidth] = useState("1")
   const [flower_density, setFlowerDensity] = useState(50)
   const [rock_density, setRockDensity] = useState(50)
   const [bush_density, setBushDensity] = useState(50)
@@ -67,6 +68,7 @@ function App() {
           height:height,
           width:width,
           river_width:river_width,
+          road_width:road_width,
           flower_density:flower_density,
           rock_density:rock_density,
           bush_density:bush_density,
@@ -119,6 +121,14 @@ function App() {
           Enter river width: <input 
             value={river_width}
             onChange={e => setRiverWidth(e.target.value)}
+          />
+        </label>
+      </div>
+      <div>
+        <label>
+          Enter road width: <input 
+            value={road_width}
+            onChange={e => setRoadWidth(e.target.value)}
           />
         </label>
       </div>
