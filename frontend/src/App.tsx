@@ -255,9 +255,16 @@ function App() {
         </button>
       </div>
       <div className="card">
-        {
-          imageURL && <img src={imageURL} alt="Terrain map" style={{ maxWidth: '800px', width: '100%', height: 'auto', marginTop: '1rem' }} />
-        }
+        {imageURL && (
+          <>
+            <img src={imageURL} alt="Terrain map" style={{ maxWidth: '800px', width: '100%', height: 'auto', marginTop: '1rem' }} />
+            <div>
+              <a href={imageURL} download={`map_${seed || 'random'}.png`}>
+                <button>Download map</button>
+              </a>
+            </div>
+          </>
+        )}
       </div>
 
       <p>
