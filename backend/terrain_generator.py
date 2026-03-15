@@ -45,6 +45,7 @@ class TerrainGenerator:
         self.road_pixel_mask: Optional[np.ndarray] = None
         self.road_spline_points: Optional[list] = None
         self.road_radius_px: int = 0
+        self.bridge_crossings: list = [] # list of bridge crossing dicts: {cx, cy, orientation ('H'|'V'), bbox (x0,y0,x1,y1)}
 
         random.seed(seed)
         np.random.seed(seed)
@@ -83,6 +84,19 @@ class TerrainGenerator:
                 self.textures[terrain_type] = texture
             else:
                 print(f"Warning: Texture not found: {filepath}")
+
+        bridge_candidates = sorted([
+            f for f in os.listdir(self.texture_folder)
+            if f.lower().endswith('.png') and 'bridge' in f.lower()
+            and os.path.isfile(os.path.join(self.texture_folder, f))
+        ])
+        if bridge_candidates:
+            bridge_tex = Image.open(
+                os.path.join(self.texture_folder, bridge_candidates[0])
+            ).convert('RGBA')
+            self.textures['bridge'] = bridge_tex
+        else:
+            print(f"Warning: No bridge texture found in: {self.texture_folder}")
 
         road_filepath = os.path.join(self.texture_folder, 'road.png')
         if os.path.exists(road_filepath):
@@ -717,6 +731,91 @@ class TerrainGenerator:
 
         return image
 
+    def _compute_bridge_crossings(self, px_points, road_mask, road_half_w) -> list:
+        if not hasattr(self, 'river_pixel_mask') or self.river_pixel_mask is None:
+            return []
+
+        crossings = []
+        river_mask = self.river_pixel_mask
+        road_diameter = int(road_half_w * 2)
+
+        for i in range(len(px_points) - 1):
+            x0, y0 = px_points[i]
+            x1, y1 = px_points[i + 1]
+
+            # Determine orientation of this segment
+            dx = abs(x1 - x0)
+            dy = abs(y1 - y0)
+            orientation = 'H' if dx >= dy else 'V'
+
+            # Rasterise just this segment
+            from PIL import Image as _Image, ImageDraw as _ImageDraw
+            img_h, img_w = river_mask.shape
+            seg_img = _Image.new('L', (img_w, img_h), 0)
+            seg_draw = _ImageDraw.Draw(seg_img)
+            seg_draw.line([(x0, y0), (x1, y1)], fill=255, width=road_diameter)
+            r = int(road_half_w)
+            for px, py in [(x0, y0), (x1, y1)]:
+                seg_draw.ellipse([px - r, py - r, px + r, py + r], fill=255)
+            seg_mask = np.array(seg_img) > 127
+
+            # Intersection of this road segment with the river
+            overlap = seg_mask & river_mask
+            if not overlap.any():
+                continue
+
+            # Bounding box of the overlap region
+            rows_hit = np.where(overlap.any(axis=1))[0]
+            cols_hit = np.where(overlap.any(axis=0))[0]
+            oy0, oy1 = int(rows_hit[0]), int(rows_hit[-1])
+            ox0, ox1 = int(cols_hit[0]), int(cols_hit[-1])
+
+            # Expand bounding box so bridge starts and ends on ground, not water
+            land_margin = self.tile_size
+
+            if orientation == 'H':
+                seg_cy = (y0 + y1) // 2
+                final_x0 = ox0 - land_margin
+                final_x1 = ox1 + land_margin
+                final_y0 = seg_cy - road_half_w
+                final_y1 = seg_cy + road_half_w
+            else:  # 'V'
+                seg_cx = (x0 + x1) // 2
+                final_y0 = oy0 - land_margin
+                final_y1 = oy1 + land_margin
+                final_x0 = seg_cx - road_half_w
+                final_x1 = seg_cx + road_half_w
+
+            cx = (final_x0 + final_x1) // 2
+            cy = (final_y0 + final_y1) // 2
+            overlap_px = int(overlap.sum())  # pixel count used for deduplication
+
+            crossings.append({
+                'cx': cx,
+                'cy': cy,
+                'orientation': orientation,
+                'bbox': (int(final_x0), int(final_y0), int(final_x1), int(final_y1)),
+                'road_diameter': road_diameter,
+                'overlap_px': overlap_px,
+            })
+
+        # Deduplicate: when two crossings are close together (adjacent road segments both clipping the same river bend), keep only the one with the larger overlap.
+        river_diam = int(getattr(self, 'river_radius_px', 0) * 2)
+        merge_dist = max(river_diam, road_diameter)
+
+        kept = []
+        for c in sorted(crossings, key=lambda x: -x['overlap_px']):
+            too_close = False
+            for k in kept:
+                dist = math.sqrt((c['cx'] - k['cx']) ** 2 + (c['cy'] - k['cy']) ** 2)
+                if dist < merge_dist:
+                    too_close = True
+                    break
+            if not too_close:
+                kept.append(c)
+
+        return kept
+
     def _render_road(self, base_image: Image.Image) -> Image.Image:
         if self.road_pixel_mask is None:
             return base_image
@@ -740,7 +839,75 @@ class TerrainGenerator:
         result = base_image.copy()
         result.paste(road_layer, (0, 0), mask=road_mask_img)
 
+        # Overlay bridge asset at every road-over-river crossing
+        result = self._render_bridges(result)
+
         return result
+
+    def _render_bridges(self, image: Image.Image) -> Image.Image:
+        if not self.bridge_crossings:
+            return image
+        if 'bridge' not in self.textures:
+            return image
+
+        bridge_raw = self.textures['bridge']
+        image = image.convert('RGBA')
+
+        for crossing in self.bridge_crossings:
+            orientation = crossing['orientation']
+            x0, y0, x1, y1 = crossing['bbox']
+            road_diameter = crossing['road_diameter']
+
+            if orientation == 'H':
+                bridge_oriented = bridge_raw
+            else:
+                bridge_oriented = bridge_raw.rotate(90, expand=True)
+
+            bw, bh = bridge_oriented.size
+
+            # scale short axis to road diametser
+            if orientation == 'H':
+                scale = road_diameter / bh
+            else:
+                scale = road_diameter / bw
+
+            # scale up bridge texture to cover gaps caused by transparent padding
+            OVERLAP = 1.25
+            scale *= OVERLAP
+
+            tile_w = max(1, int(bw * scale))
+            tile_h = max(1, int(bh * scale))
+            bridge_tile = bridge_oriented.resize((tile_w, tile_h), Image.LANCZOS)
+
+            # Step size along the road axis: use the un-inflated size so tiles
+            # overlap each other by the same OVERLAP factor rather than leaving gaps.
+            if orientation == 'H':
+                step = max(1, int(bw * (scale / OVERLAP)))
+                span = x1 - x0
+            else:
+                step = max(1, int(bh * (scale / OVERLAP)))
+                span = y1 - y0
+
+            num_tiles = max(1, math.ceil(span / step))
+            total_long = num_tiles * step
+
+            # Place tiles centred on the crossing, tiled along the road axis.
+            if orientation == 'H':
+                cy = (y0 + y1) // 2
+                start_x = (x0 + x1) // 2 - total_long // 2
+                for i in range(num_tiles):
+                    px = start_x + i * step
+                    py = cy - tile_h // 2
+                    image.paste(bridge_tile, (px, py), mask=bridge_tile)
+            else:
+                cx = (x0 + x1) // 2
+                start_y = (y0 + y1) // 2 - total_long // 2
+                for i in range(num_tiles):
+                    px = cx - tile_w // 2
+                    py = start_y + i * step
+                    image.paste(bridge_tile, (px, py), mask=bridge_tile)
+
+        return image.convert('RGB')
 
     def _render_smooth_water(self, base_image, colors):
         if not hasattr(self, 'river_pixel_mask') or self.river_pixel_mask is None:
@@ -1017,6 +1184,9 @@ class TerrainGenerator:
         self.road_radius_px = road_half_w
 
         pixel_mask = self._rasterize_straight_road(px_points, road_half_w, img_w, img_h)
+
+        # Detect where road crosses the river and store crossing metadata for rendering
+        self.bridge_crossings = self._compute_bridge_crossings(px_points, pixel_mask, road_half_w)
 
         tiles: Set[Tuple[int, int]] = set()
         mask_reshaped = pixel_mask.reshape(self.height, ts, self.width, ts)
