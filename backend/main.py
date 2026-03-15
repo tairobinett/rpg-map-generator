@@ -31,6 +31,9 @@ class seed_request(BaseModel):
     rock_coverage:float
     bush_coverage:float
     grid:bool
+    river_enabled:bool = True
+    building_enabled:bool = True
+    road_enabled:bool = True
 
 @app.get("/hello")
 def hello_world():
@@ -51,8 +54,10 @@ def generate_map(request:seed_request):
         input_rock_coverage_float = 1.0 - float(request.rock_coverage) / 100
         input_bush_coverage_float = 1.0 - float(request.bush_coverage) / 100
         input_grid_toggle = bool(request.grid)
+        input_river_enabled = bool(request.river_enabled)
+        input_building_enabled = bool(request.building_enabled)
+        input_road_enabled = bool(request.road_enabled)
         print(f"input_river_width_int value: {input_river_width_int}")
-        # print(f"input_seed_int value: {input_seed_int}")
     except ValueError:
         print("Invalid input.")
         exit()
@@ -64,7 +69,17 @@ def generate_map(request:seed_request):
     print("Generating terrain...")
     foliage_density = [input_flower_density_float, input_rock_density_float, input_bush_density_float]
     foliage_coverage = [input_flower_coverage_float, input_rock_coverage_float, input_bush_coverage_float]
-    generator.generate_terrain(river_width=input_river_width_int, road_width=input_road_width_int, foliage_density=foliage_density, foliage_coverage=foliage_coverage, scale=0.1, octaves=4)
+    generator.generate_terrain(
+        river_width=input_river_width_int,
+        road_width=input_road_width_int,
+        foliage_density=foliage_density,
+        foliage_coverage=foliage_coverage,
+        scale=0.1,
+        octaves=4,
+        river_enabled=input_river_enabled,
+        building_enabled=input_building_enabled,
+        road_enabled=input_road_enabled,
+    )
     
     print("Rendering image...")
     image = generator.render_to_image(show_grid=input_grid_toggle)
@@ -73,7 +88,3 @@ def generate_map(request:seed_request):
     image.save(image_byte_array, format="PNG")
     image_byte_array.seek(0)
     return StreamingResponse(image_byte_array, media_type="image/png")
-    
-    # output_file = "battlemap_test.png"
-    # image.save(output_file)
-    # print(f"Map saved to {output_file}")

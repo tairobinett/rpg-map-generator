@@ -127,29 +127,44 @@ class TerrainGenerator:
         return noise_map
 
     def generate_terrain(self, river_width, foliage_density, foliage_coverage, scale=0.1, octaves=4,
-                         num_rooms=4, min_room_size=3, max_room_size=6, road_width=1):
+                         num_rooms=4, min_room_size=3, max_room_size=6, road_width=1,
+                         river_enabled=True, building_enabled=True, road_enabled=True):
         self.terrain_grid.fill(TerrainType.GRASS)
 
         # Generate smooth pixel-space river mask and stamp water tiles from it
-        river_pixel_mask, river_tiles = self.generate_river(river_width)
-        self.river_pixel_mask = river_pixel_mask  # store for rendering
-
-        for tile in list(river_tiles):
-            self.terrain_grid[tile[1], tile[0]] = TerrainType.WATER
+        if river_enabled:
+            river_pixel_mask, river_tiles = self.generate_river(river_width)
+            self.river_pixel_mask = river_pixel_mask  # store for rendering
+            for tile in list(river_tiles):
+                self.terrain_grid[tile[1], tile[0]] = TerrainType.WATER
+        else:
+            img_w = self.width * self.tile_size
+            img_h = self.height * self.tile_size
+            self.river_pixel_mask = np.zeros((img_h, img_w), dtype=bool)
+            river_tiles = set()
 
         # Generate building
-        self.building = self.generate_building(
-            num_rooms=num_rooms,
-            min_room_size=min_room_size,
-            max_room_size=max_room_size,
-            river_tiles=river_tiles,
-        )
-        for (row, col) in self.building.interior_tiles:
-            self.terrain_grid[row, col] = TerrainType.FLOOR
+        if building_enabled:
+            self.building = self.generate_building(
+                num_rooms=num_rooms,
+                min_room_size=min_room_size,
+                max_room_size=max_room_size,
+                river_tiles=river_tiles,
+            )
+            for (row, col) in self.building.interior_tiles:
+                self.terrain_grid[row, col] = TerrainType.FLOOR
+        else:
+            self.building = Building()
 
         # Generate road from a map edge to the building entrance, or across map if there is no building
-        road_pixel_mask, road_tiles = self.generate_road(road_width=road_width)
-        self.road_pixel_mask = road_pixel_mask
+        if road_enabled:
+            road_pixel_mask, road_tiles = self.generate_road(road_width=road_width)
+            self.road_pixel_mask = road_pixel_mask
+        else:
+            img_w = self.width * self.tile_size
+            img_h = self.height * self.tile_size
+            self.road_pixel_mask = None
+            self.bridge_crossings = []
 
         # Per-subdirectory noise maps
         # Each subdirectory = one foliage type with its own noise map
@@ -196,9 +211,10 @@ class TerrainGenerator:
                     # Exclude tiles inside river mask
                     center_px = col * self.tile_size + self.tile_size // 2
                     center_py = row * self.tile_size + self.tile_size // 2
-                    if (0 <= center_py < river_pixel_mask.shape[0] and
-                            0 <= center_px < river_pixel_mask.shape[1]):
-                        if river_pixel_mask[center_py, center_px]:
+                    if (self.river_pixel_mask is not None and
+                            0 <= center_py < self.river_pixel_mask.shape[0] and
+                            0 <= center_px < self.river_pixel_mask.shape[1]):
+                        if self.river_pixel_mask[center_py, center_px]:
                             continue
                     # Exclude tiles inside road mask
                     if (self.road_pixel_mask is not None and

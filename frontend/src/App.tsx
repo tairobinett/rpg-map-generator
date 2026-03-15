@@ -1,11 +1,8 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
 import Slider from '@mui/material/Slider'
 
 function App() {
-  const [count, setCount] = useState(0)
   const [message, setMessage] = useState("test")
   const [imageURL, setImageURL] = useState("")
   const [seed, setSeed] = useState("")
@@ -21,16 +18,10 @@ function App() {
   const [bush_coverage, setBushCoverage] = useState(50)
   const [grid_toggle, setGridToggle] = useState(true)
 
-  const handleClick = async () => {
-    try{
-      const response = await fetch('http://127.0.0.1:8000/hello');
-      const data = await response.json();
-      setMessage(data.message);
-    }
-    catch(e){
-      console.error("Error: ", e);
-    }
-  }
+  // Feature toggles
+  const [river_enabled, setRiverEnabled] = useState(true)
+  const [building_enabled, setBuildingEnabled] = useState(true)
+  const [road_enabled, setRoadEnabled] = useState(true)
 
   const handleSliderChangeFlowerD = (event: Event, newFlowerDensity: number) => {
     setFlowerDensity(newFlowerDensity);
@@ -58,7 +49,7 @@ function App() {
   const generateImage = async () => {
     try{
       console.log(seed)
-      const response = await fetch('http://127.0.0.1:8000/generate_map', { // http://34.23.208.207:5173/ for remote hosting
+      const response = await fetch('http://127.0.0.1:8000/generate_map', {
         method:"POST",
         headers:{
           "Content-Type":"application/json"
@@ -75,7 +66,10 @@ function App() {
           flower_coverage:flower_coverage,
           rock_coverage:rock_coverage,
           bush_coverage:bush_coverage,
-          grid:grid_toggle
+          grid:grid_toggle,
+          river_enabled:river_enabled,
+          building_enabled:building_enabled,
+          road_enabled:road_enabled,
         }),
       });
       const blob = await response.blob();
@@ -116,19 +110,57 @@ function App() {
           />
         </label>
       </div>
+
+      {/* River */}
       <div>
         <label>
-          Enter river width: <input 
-            value={river_width}
-            onChange={e => setRiverWidth(e.target.value)}
+          Enable river
+          <input 
+            type="checkbox"
+            checked={river_enabled}
+            onChange={() => setRiverEnabled(!river_enabled)}
           />
         </label>
       </div>
       <div>
+        <label style={{ opacity: river_enabled ? 1 : 0.4 }}>
+          Enter river width: <input 
+            value={river_width}
+            onChange={e => setRiverWidth(e.target.value)}
+            disabled={!river_enabled}
+          />
+        </label>
+      </div>
+
+      {/* Building */}
+      <div>
         <label>
+          Enable building
+          <input 
+            type="checkbox"
+            checked={building_enabled}
+            onChange={() => setBuildingEnabled(!building_enabled)}
+          />
+        </label>
+      </div>
+
+      {/* Road */}
+      <div>
+        <label>
+          Enable road
+          <input 
+            type="checkbox"
+            checked={road_enabled}
+            onChange={() => setRoadEnabled(!road_enabled)}
+          />
+        </label>
+      </div>
+      <div>
+        <label style={{ opacity: road_enabled ? 1 : 0.4 }}>
           Enter road width: <input 
             value={road_width}
             onChange={e => setRoadWidth(e.target.value)}
+            disabled={!road_enabled}
           />
         </label>
       </div>
@@ -208,7 +240,6 @@ function App() {
         </label>
       </div>
 
-      
       <div>
         <label>
           Toggle grid<input 
@@ -226,7 +257,6 @@ function App() {
       <div className="card">
         {
           imageURL && <img src={imageURL} alt="Terrain map" style={{ maxWidth: '800px', width: '100%', height: 'auto', marginTop: '1rem' }} />
-          
         }
       </div>
 
