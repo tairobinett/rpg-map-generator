@@ -1,280 +1,605 @@
 import { useState } from 'react'
-import './App.css'
-import Slider from '@mui/material/Slider'
+import {
+  Box,
+  Button,
+  Checkbox,
+  Container,
+  Divider,
+  FormControlLabel,
+  Grid,
+  Paper,
+  Slider,
+  Stack,
+  TextField,
+  Typography,
+  CircularProgress,
+  Tooltip,
+  IconButton,
+  Collapse,
+  alpha,
+} from '@mui/material'
+import { createTheme, ThemeProvider } from '@mui/material/styles'
+import CssBaseline from '@mui/material/CssBaseline'
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
+import DownloadIcon from '@mui/icons-material/Download'
+import MapIcon from '@mui/icons-material/Map'
+import WaterIcon from '@mui/icons-material/Water'
+import HomeIcon from '@mui/icons-material/Home'
+import RouteIcon from '@mui/icons-material/Route'
+import GridOnIcon from '@mui/icons-material/GridOn'
+import LandscapeIcon from '@mui/icons-material/Landscape'
+import ParkIcon from '@mui/icons-material/Park'
 
-function App() {
-  const [message, setMessage] = useState("test")
-  const [imageURL, setImageURL] = useState("")
-  const [seed, setSeed] = useState("")
-  const [height, setHeight] = useState("15")
-  const [width, setWidth] = useState("15")
-  const [river_width, setRiverWidth] = useState("1")
-  const [road_width, setRoadWidth] = useState("1")
-  const [flower_density, setFlowerDensity] = useState(50)
-  const [rock_density, setRockDensity] = useState(50)
-  const [bush_density, setBushDensity] = useState(50)
+const theme = createTheme({
+  palette: {
+    mode: 'dark',
+    primary: {
+      main: '#c8a96e',
+      light: '#e2c99a',
+      dark: '#96784a',
+    },
+    secondary: {
+      main: '#6b9e6b',
+      light: '#8fc08f',
+      dark: '#4a7a4a',
+    },
+    background: {
+      default: '#1a1a14',
+      paper: '#252520',
+    },
+    text: {
+      primary: '#e8e0cc',
+      secondary: '#a09880',
+    },
+    divider: 'rgba(200,169,110,0.15)',
+  },
+  typography: {
+    fontFamily: '"Cinzel", "Palatino Linotype", serif',
+    h4: {
+      fontFamily: '"Cinzel Decorative", "Cinzel", serif',
+      letterSpacing: '0.08em',
+      fontWeight: 700,
+    },
+    h6: {
+      fontFamily: '"Cinzel", serif',
+      letterSpacing: '0.05em',
+      fontWeight: 600,
+    },
+    body1: {
+      fontFamily: '"Crimson Text", "Georgia", serif',
+      fontSize: '1rem',
+    },
+    body2: {
+      fontFamily: '"Crimson Text", "Georgia", serif',
+      fontSize: '0.9rem',
+    },
+    caption: {
+      fontFamily: '"Crimson Text", "Georgia", serif',
+      fontSize: '0.8rem',
+    },
+  },
+  shape: {
+    borderRadius: 4,
+  },
+  components: {
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',
+          borderColor: 'rgba(200,169,110,0.2)',
+        },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          fontFamily: '"Cinzel", serif',
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+        },
+      },
+    },
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          '& .MuiInputBase-root': {
+            fontFamily: '"Crimson Text", Georgia, serif',
+          },
+        },
+      },
+    },
+    MuiSlider: {
+      styleOverrides: {
+        root: {
+          color: '#c8a96e',
+          '& .MuiSlider-thumb': {
+            backgroundColor: '#c8a96e',
+            '&:hover': {
+              boxShadow: '0 0 0 8px rgba(200,169,110,0.16)',
+            },
+          },
+          '& .MuiSlider-rail': {
+            backgroundColor: 'rgba(200,169,110,0.2)',
+          },
+        },
+      },
+    },
+    MuiFormControlLabel: {
+      styleOverrides: {
+        label: {
+          fontFamily: '"Crimson Text", Georgia, serif',
+          fontSize: '1rem',
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          fontFamily: '"Cinzel", serif',
+          fontSize: '0.7rem',
+          letterSpacing: '0.05em',
+        },
+      },
+    },
+  },
+})
+
+function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 2.5 }}>
+      <Box sx={{ color: 'primary.main', display: 'flex', alignItems: 'center' }}>
+        {icon}
+      </Box>
+      <Typography variant="h6" sx={{ fontSize: '0.85rem', color: 'primary.main' }}>
+        {title}
+      </Typography>
+      <Box sx={{ flex: 1, height: '1px', background: 'linear-gradient(90deg, rgba(200,169,110,0.4) 0%, transparent 100%)' }} />
+    </Stack>
+  )
+}
+
+function CoverageSlider({
+  label,
+  coverage,
+  onCoverageChange,
+}: {
+  label: string
+  coverage: number
+  onCoverageChange: (v: number) => void
+}) {
+  return (
+    <Box sx={{ mb: 2 }}>
+      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 1.5, fontSize: '0.9rem' }}>
+        {label}
+      </Typography>
+      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.5 }}>
+        Coverage — {coverage}%
+      </Typography>
+      <Slider
+        size="small"
+        value={coverage}
+        onChange={(_, v) => onCoverageChange(v as number)}
+        valueLabelDisplay="auto"
+      />
+    </Box>
+  )
+}
+
+function FeatureRow({
+  label,
+  icon,
+  enabled,
+  onToggle,
+  children,
+}: {
+  label: string
+  icon: React.ReactNode
+  enabled: boolean
+  onToggle: () => void
+  children?: React.ReactNode
+}) {
+  return (
+    <Box sx={{ mb: 2 }}>
+      <FormControlLabel
+        control={
+          <Checkbox
+            checked={enabled}
+            onChange={onToggle}
+            sx={{
+              color: 'rgba(200,169,110,0.4)',
+              '&.Mui-checked': { color: 'primary.main' },
+            }}
+          />
+        }
+        label={
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Box sx={{ color: enabled ? 'primary.main' : 'text.secondary', display: 'flex' }}>{icon}</Box>
+            <span style={{ color: enabled ? undefined : 'rgba(160,152,128,0.5)' }}>{label}</span>
+          </Stack>
+        }
+      />
+      <Collapse in={enabled}>
+        <Box sx={{ ml: 5, mt: 1 }}>{children}</Box>
+      </Collapse>
+    </Box>
+  )
+}
+
+export default function App() {
+  const [imageURL, setImageURL] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [seed, setSeed] = useState('')
+  const [height, setHeight] = useState('15')
+  const [width, setWidth] = useState('15')
+  const [river_width, setRiverWidth] = useState('1')
+  const [road_width, setRoadWidth] = useState('1')
   const [flower_coverage, setFlowerCoverage] = useState(50)
   const [rock_coverage, setRockCoverage] = useState(50)
   const [bush_coverage, setBushCoverage] = useState(50)
   const [grid_toggle, setGridToggle] = useState(true)
-
-  // Feature toggles
   const [river_enabled, setRiverEnabled] = useState(true)
   const [building_enabled, setBuildingEnabled] = useState(true)
   const [road_enabled, setRoadEnabled] = useState(true)
 
-  const handleSliderChangeFlowerD = (event: Event, newFlowerDensity: number) => {
-    setFlowerDensity(newFlowerDensity);
-  };
-
-  const handleSliderChangeRockD = (event: Event, newRockDensity: number) => {
-    setRockDensity(newRockDensity);
-  };
-
-  const handleSliderChangeBushD = (event: Event, newBushDensity: number) => {
-    setBushDensity(newBushDensity);
-  };
-  const handleSliderChangeFlowerC = (event: Event, newFlowerCoverage: number) => {
-    setFlowerCoverage(newFlowerCoverage);
-  };
-
-  const handleSliderChangeRockC = (event: Event, newRockCoverage: number) => {
-    setRockCoverage(newRockCoverage);
-  };
-
-  const handleSliderChangeBushC = (event: Event, newBushCoverage: number) => {
-    setBushCoverage(newBushCoverage);
-  };
-
   const generateImage = async () => {
-    try{
-      console.log(seed)
+    setLoading(true)
+    try {
       const response = await fetch('http://127.0.0.1:8000/generate_map', {
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json"
-        },
-        body:JSON.stringify({
-          seed:seed,
-          height:height,
-          width:width,
-          river_width:river_width,
-          road_width:road_width,
-          flower_density:flower_density,
-          rock_density:rock_density,
-          bush_density:bush_density,
-          flower_coverage:flower_coverage,
-          rock_coverage:rock_coverage,
-          bush_coverage:bush_coverage,
-          grid:grid_toggle,
-          river_enabled:river_enabled,
-          building_enabled:building_enabled,
-          road_enabled:road_enabled,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seed,
+          height,
+          width,
+          river_width,
+          road_width,
+          flower_coverage,
+          rock_coverage,
+          bush_coverage,
+          grid: grid_toggle,
+          river_enabled,
+          building_enabled,
+          road_enabled,
         }),
-      });
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      setImageURL(url);
-    }
-    catch(e){
-      console.error("Error: ", e);
+      })
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      setImageURL(url)
+    } catch (e) {
+      console.error('Error: ', e)
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
-    <>
-      <h1>RPG Map Generator</h1>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      {/* Parchment background texture */}
+      <Box
+        sx={{
+          minHeight: '100vh',
+          background: `
+            radial-gradient(ellipse at 20% 20%, rgba(139,109,56,0.08) 0%, transparent 50%),
+            radial-gradient(ellipse at 80% 80%, rgba(107,158,107,0.06) 0%, transparent 50%),
+            #1a1a14
+          `,
+          py: 4,
+        }}
+      >
+        {/* Google Fonts */}
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');`}</style>
 
-      <div>
-        <label>
-          Enter seed: <input 
-            name="seedInput" 
-            value={seed}
-            onChange={e => setSeed(e.target.value)}
-          />
-        </label>
-      </div>
-      <div>
-        <label>
-          Enter map width: <input 
-            value={width}
-            onChange={e => setWidth(e.target.value)}
-          />
-        </label>
-      </div>
-      <div>
-        <label>
-          Enter map height: <input 
-            value={height}
-            onChange={e => setHeight(e.target.value)}
-          />
-        </label>
-      </div>
+        <Container maxWidth="xl">
+          {/* Header */}
+          <Box sx={{ textAlign: 'center', mb: 5 }}>
+            <Stack direction="row" justifyContent="center" alignItems="center" spacing={2} sx={{ mb: 1 }}>
+              <Box sx={{ color: 'primary.main', opacity: 0.6 }}>✦</Box>
+              <MapIcon sx={{ color: 'primary.main', fontSize: 32 }} />
+              <Box sx={{ color: 'primary.main', opacity: 0.6 }}>✦</Box>
+            </Stack>
+            <Typography
+              variant="h4"
+              sx={{
+                fontSize: { xs: '1.4rem', md: '1.9rem' },
+                background: 'linear-gradient(135deg, #e2c99a 0%, #c8a96e 50%, #96784a 100%)',
+                backgroundClip: 'text',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                mb: 0.5,
+              }}
+            >
+              RPG Map Generator
+            </Typography>
+          </Box>
 
-      {/* River */}
-      <div>
-        <label>
-          Enable river
-          <input 
-            type="checkbox"
-            checked={river_enabled}
-            onChange={() => setRiverEnabled(!river_enabled)}
-          />
-        </label>
-      </div>
-      <div>
-        <label style={{ opacity: river_enabled ? 1 : 0.4 }}>
-          Enter river width: <input 
-            value={river_width}
-            onChange={e => setRiverWidth(e.target.value)}
-            disabled={!river_enabled}
-          />
-        </label>
-      </div>
+          <Grid container spacing={3}>
+            {/* LEFT PANEL — Controls */}
+            <Grid size={{ xs: 12, lg: 4 }}>
+              <Stack spacing={2.5}>
 
-      {/* Building */}
-      <div>
-        <label>
-          Enable building
-          <input 
-            type="checkbox"
-            checked={building_enabled}
-            onChange={() => setBuildingEnabled(!building_enabled)}
-          />
-        </label>
-      </div>
+                {/* Map Settings */}
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 3,
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    background: alpha('#252520', 0.8),
+                  }}
+                >
+                  <SectionHeader icon={<MapIcon fontSize="small" />} title="Map Settings" />
 
-      {/* Road */}
-      <div>
-        <label>
-          Enable road
-          <input 
-            type="checkbox"
-            checked={road_enabled}
-            onChange={() => setRoadEnabled(!road_enabled)}
-          />
-        </label>
-      </div>
-      <div>
-        <label style={{ opacity: road_enabled ? 1 : 0.4 }}>
-          Enter road width: <input 
-            value={road_width}
-            onChange={e => setRoadWidth(e.target.value)}
-            disabled={!road_enabled}
-          />
-        </label>
-      </div>
+                  <Stack spacing={2}>
+                    <TextField
+                      label="Seed"
+                      placeholder="Enter any text..."
+                      value={seed}
+                      onChange={e => setSeed(e.target.value)}
+                      size="small"
+                      fullWidth
+                      variant="outlined"
+                      InputProps={{
+                        endAdornment: (
+                          <Tooltip title="Click for a random seed">
+                            <IconButton size="small" onClick={() => setSeed(Math.random().toString(36).slice(2))}>
+                              <AutoFixHighIcon fontSize="small" sx={{ color: 'primary.main', opacity: 0.7 }} />
+                            </IconButton>
+                          </Tooltip>
+                        ),
+                      }}
+                    />
+                    <Grid container spacing={2}>
+                      <Grid size={6}>
+                        <TextField
+                          label="Width"
+                          type="number"
+                          value={width}
+                          onChange={e => setWidth(e.target.value)}
+                          size="small"
+                          fullWidth
+                          slotProps={{ htmlInput: { min: 5, max: 50 } }}
+                        />
+                      </Grid>
+                      <Grid size={6}>
+                        <TextField
+                          label="Height"
+                          type="number"
+                          value={height}
+                          onChange={e => setHeight(e.target.value)}
+                          size="small"
+                          fullWidth
+                          slotProps={{ htmlInput: { min: 5, max: 50 } }}
+                        />
+                      </Grid>
+                    </Grid>
 
-      <div>
-        <label>
-          Flower density percentage: 
-          <Slider
-            size="small"
-            defaultValue={50}
-            aria-label="Small"
-            valueLabelDisplay="auto"
-            onChange={handleSliderChangeFlowerD}
-          />
-        </label>
-      </div>
-      <div>
-        <label>
-          Flower coverage percentage: 
-          <Slider
-            size="small"
-            defaultValue={50}
-            aria-label="Small"
-            valueLabelDisplay="auto"
-            onChange={handleSliderChangeFlowerC}
-          />
-        </label>
-      </div>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={grid_toggle}
+                          onChange={() => setGridToggle(!grid_toggle)}
+                          icon={<GridOnIcon sx={{ color: 'rgba(200,169,110,0.3)' }} />}
+                          checkedIcon={<GridOnIcon sx={{ color: 'primary.main' }} />}
+                        />
+                      }
+                      label="Show Grid Overlay"
+                    />
+                  </Stack>
+                </Paper>
 
-      <div>
-        <label>
-          Rock density percentage: 
-          <Slider
-            size="small"
-            defaultValue={50}
-            aria-label="Small"
-            valueLabelDisplay="auto"
-            onChange={handleSliderChangeRockD}
-          />
-        </label>
-      </div>
-      <div>
-        <label>
-          Rock coverage percentage: 
-          <Slider
-            size="small"
-            defaultValue={50}
-            aria-label="Small"
-            valueLabelDisplay="auto"
-            onChange={handleSliderChangeRockC}
-          />
-        </label>
-      </div>
+                {/* Features */}
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 3, border: '1px solid', borderColor: 'divider', background: alpha('#252520', 0.8) }}
+                >
+                  <SectionHeader icon={<LandscapeIcon fontSize="small" />} title="Features" />
 
-      <div>
-        <label>
-          Bush density percentage: 
-          <Slider
-            size="small"
-            defaultValue={50}
-            aria-label="Small"
-            valueLabelDisplay="auto"
-            onChange={handleSliderChangeBushD}
-          />
-        </label>
-      </div>
-      <div>
-        <label>
-          Bush coverage percentage: 
-          <Slider
-            size="small"
-            defaultValue={50}
-            aria-label="Small"
-            valueLabelDisplay="auto"
-            onChange={handleSliderChangeBushC}
-          />
-        </label>
-      </div>
+                  <FeatureRow
+                    label="River"
+                    icon={<WaterIcon fontSize="small" />}
+                    enabled={river_enabled}
+                    onToggle={() => setRiverEnabled(!river_enabled)}
+                  >
+                    <TextField
+                      label="River Width"
+                      type="number"
+                      value={river_width}
+                      onChange={e => setRiverWidth(e.target.value)}
+                      size="small"
+                      slotProps={{ htmlInput: { min: 1, max: 5 } }}
+                      sx={{ width: '100%', maxWidth: 160 }}
+                    />
+                  </FeatureRow>
 
-      <div>
-        <label>
-          Toggle grid<input 
-            type="checkbox"
-            checked={grid_toggle}
-            onChange={() => setGridToggle(!grid_toggle)}
-          />
-        </label>
-      </div>
-      <div>
-        <button onClick={() => generateImage()}>
-          Generate map
-        </button>
-      </div>
-      <div className="card">
-        {imageURL && (
-          <>
-            <img src={imageURL} alt="Terrain map" style={{ maxWidth: '800px', width: '100%', height: 'auto', marginTop: '1rem' }} />
-            <div>
-              <a href={imageURL} download={`map_${seed || 'random'}.png`}>
-                <button>Download map</button>
-              </a>
-            </div>
-          </>
-        )}
-      </div>
+                  <FeatureRow
+                    label="Building"
+                    icon={<HomeIcon fontSize="small" />}
+                    enabled={building_enabled}
+                    onToggle={() => setBuildingEnabled(!building_enabled)}
+                  />
 
-      <p>
-        Tile textures by 
-        <a href="https://2minutetabletop.com"> 2 Minute Tabletop</a>, 
-        licensed under 
-        <a href="https://creativecommons.org/licenses/by-nc/4.0/"> CC BY-NC 4.0</a>
-      </p>
-    </>
+                  <FeatureRow
+                    label="Road"
+                    icon={<RouteIcon fontSize="small" />}
+                    enabled={road_enabled}
+                    onToggle={() => setRoadEnabled(!road_enabled)}
+                  >
+                    <TextField
+                      label="Road Width"
+                      type="number"
+                      value={road_width}
+                      onChange={e => setRoadWidth(e.target.value)}
+                      size="small"
+                      slotProps={{ htmlInput: { min: 1, max: 5 } }}
+                      sx={{ width: '100%', maxWidth: 160 }}
+                    />
+                  </FeatureRow>
+                </Paper>
+
+                {/* Foliage */}
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 3, border: '1px solid', borderColor: 'divider', background: alpha('#252520', 0.8) }}
+                >
+                  <SectionHeader icon={<ParkIcon fontSize="small" />} title="Foliage & Objects" />
+
+                  <CoverageSlider
+                    label="Flowers"
+                    coverage={flower_coverage}
+                    onCoverageChange={setFlowerCoverage}
+                  />
+                  <Divider sx={{ my: 2, borderColor: 'divider' }} />
+                  <CoverageSlider
+                    label="Rocks"
+                    coverage={rock_coverage}
+                    onCoverageChange={setRockCoverage}
+                  />
+                  <Divider sx={{ my: 2, borderColor: 'divider' }} />
+                  <CoverageSlider
+                    label="Bushes"
+                    coverage={bush_coverage}
+                    onCoverageChange={setBushCoverage}
+                  />
+                </Paper>
+
+                {/* Generate Button */}
+                <Button
+                  variant="contained"
+                  size="large"
+                  onClick={generateImage}
+                  disabled={loading}
+                  startIcon={loading ? <CircularProgress size={18} color="inherit" /> : <AutoFixHighIcon />}
+                  fullWidth
+                  sx={{
+                    py: 1.8,
+                    fontSize: '0.9rem',
+                    background: 'linear-gradient(135deg, #96784a 0%, #c8a96e 50%, #96784a 100%)',
+                    backgroundSize: '200% 100%',
+                    color: '#1a1a14',
+                    fontWeight: 700,
+                    border: '1px solid rgba(200,169,110,0.5)',
+                    boxShadow: '0 4px 20px rgba(200,169,110,0.2)',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      backgroundPosition: '100% 0',
+                      boxShadow: '0 6px 28px rgba(200,169,110,0.35)',
+                      transform: 'translateY(-1px)',
+                    },
+                    '&:disabled': {
+                      background: 'rgba(200,169,110,0.2)',
+                      color: 'rgba(200,169,110,0.4)',
+                    },
+                  }}
+                >
+                  {loading ? 'Generating Map…' : 'Generate Map'}
+                </Button>
+
+              </Stack>
+            </Grid>
+
+            {/* RIGHT PANEL — Map Output */}
+            <Grid size={{ xs: 12, lg: 8 }}>
+              <Paper
+                variant="outlined"
+                sx={{
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  background: alpha('#252520', 0.6),
+                  minHeight: 500,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  position: 'relative',
+                }}
+              >
+                {!imageURL && !loading && (
+                  <Box sx={{ textAlign: 'center', p: 6, opacity: 0.4 }}>
+                    <MapIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      Configure settings and click Generate
+                    </Typography>
+                  </Box>
+                )}
+
+                {loading && (
+                  <Box sx={{ textAlign: 'center', p: 6 }}>
+                    <CircularProgress sx={{ color: 'primary.main', mb: 3 }} size={48} thickness={2} />
+                    <Typography variant="body1" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                      Shaping the world…
+                    </Typography>
+                  </Box>
+                )}
+
+                {imageURL && !loading && (
+                  <Box sx={{ width: '100%', position: 'relative' }}>
+                    {/* Toolbar */}
+                    <Box
+                      sx={{
+                        px: 2,
+                        py: 1.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                      }}
+                    >
+                      <Button
+                        component="a"
+                        href={imageURL}
+                        download={`map_${seed || 'random'}.png`}
+                        size="small"
+                        startIcon={<DownloadIcon fontSize="small" />}
+                        sx={{
+                          color: 'primary.main',
+                          borderColor: 'primary.dark',
+                          fontFamily: '"Cinzel", serif',
+                          fontSize: '0.7rem',
+                          letterSpacing: '0.08em',
+                        }}
+                        variant="outlined"
+                      >
+                        Download
+                      </Button>
+                    </Box>
+
+                    <Box sx={{ p: 2 }}>
+                      <img
+                        src={imageURL}
+                        alt="Generated terrain map"
+                        style={{
+                          width: '100%',
+                          height: 'auto',
+                          display: 'block',
+                          borderRadius: 2,
+                        }}
+                      />
+                    </Box>
+                  </Box>
+                )}
+              </Paper>
+
+              {/* Attribution */}
+              <Typography
+                variant="caption"
+                sx={{ display: 'block', textAlign: 'center', mt: 1.5, color: 'text.secondary', fontStyle: 'italic' }}
+              >
+                Tile textures by{' '}
+                <Box component="a" href="https://2minutetabletop.com" sx={{ color: 'primary.main', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+                  2 Minute Tabletop
+                </Box>
+                , licensed under{' '}
+                <Box component="a" href="https://creativecommons.org/licenses/by-nc/4.0/" sx={{ color: 'primary.main', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+                  CC BY-NC 4.0
+                </Box>
+              </Typography>
+            </Grid>
+          </Grid>
+        </Container>
+      </Box>
+    </ThemeProvider>
   )
 }
-
-export default App

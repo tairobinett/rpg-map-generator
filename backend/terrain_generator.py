@@ -126,7 +126,7 @@ class TerrainGenerator:
         noise_map = (noise_map - noise_map.min()) / (noise_map.max() - noise_map.min())
         return noise_map
 
-    def generate_terrain(self, river_width, foliage_density, foliage_coverage, scale=0.1, octaves=4,
+    def generate_terrain(self, river_width, foliage_coverage, scale=0.1, octaves=4,
                          num_rooms=4, min_room_size=3, max_room_size=6, road_width=1,
                          river_enabled=True, building_enabled=True, road_enabled=True):
         self.terrain_grid.fill(TerrainType.GRASS)
@@ -222,7 +222,7 @@ class TerrainGenerator:
                             0 <= center_px < self.road_pixel_mask.shape[1]):
                         if self.road_pixel_mask[center_py, center_px]:
                             continue
-                    if local_rng.random() <= foliage_density[x]:
+                    if local_rng.random() <= 0.7:
                         tile_set.add((row, col))
 
                 self.foliage_tiles[subdir] = tile_set

@@ -24,9 +24,6 @@ class seed_request(BaseModel):
     width:int
     river_width:int
     road_width:int
-    flower_density:float
-    rock_density:float
-    bush_density:float
     flower_coverage:float
     rock_coverage:float
     bush_coverage:float
@@ -47,9 +44,6 @@ def generate_map(request:seed_request):
         input_width_int = int(request.width)
         input_river_width_int = int(request.river_width)
         input_road_width_int = int(request.road_width)
-        input_flower_density_float = float(request.flower_density) / 100
-        input_rock_density_float = float(request.rock_density) / 100
-        input_bush_density_float = float(request.bush_density) / 100
         input_flower_coverage_float = 1.0 - float(request.flower_coverage) / 100 # generate_terrain checks above threshold
         input_rock_coverage_float = 1.0 - float(request.rock_coverage) / 100
         input_bush_coverage_float = 1.0 - float(request.bush_coverage) / 100
@@ -67,12 +61,10 @@ def generate_map(request:seed_request):
     generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128, texture_folder='assets/ground_textures', foliage_folder='assets/foliage_and_objects', building_folder='assets/buildings')
     
     print("Generating terrain...")
-    foliage_density = [input_flower_density_float, input_rock_density_float, input_bush_density_float]
     foliage_coverage = [input_flower_coverage_float, input_rock_coverage_float, input_bush_coverage_float]
     generator.generate_terrain(
         river_width=input_river_width_int,
         road_width=input_road_width_int,
-        foliage_density=foliage_density,
         foliage_coverage=foliage_coverage,
         scale=0.1,
         octaves=4,
