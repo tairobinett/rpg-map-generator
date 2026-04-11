@@ -49,6 +49,15 @@ BIOME_COLORS = {
         TerrainType.MOUNTAIN: (210, 215, 220),
         TerrainType.FLOOR:    (200, 195, 190),
     },
+    "desert": {
+        TerrainType.WATER:    (100, 160, 200),
+        TerrainType.SAND:     (210, 180, 110),
+        TerrainType.GRASS:    (194, 162, 90),
+        TerrainType.FOREST:   (160, 130, 60),
+        TerrainType.HILL:     (180, 140, 80),
+        TerrainType.MOUNTAIN: (150, 120, 80),
+        TerrainType.FLOOR:    (190, 165, 115),
+    },
 }
 
 

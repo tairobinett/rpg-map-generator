@@ -244,7 +244,7 @@ export default function App() {
   const [river_enabled, setRiverEnabled] = useState(true)
   const [building_enabled, setBuildingEnabled] = useState(true)
   const [road_enabled, setRoadEnabled] = useState(true)
-  const [biome, setBiome] = useState<'grassland' | 'snow'>('grassland')
+  const [biome, setBiome] = useState<'grassland' | 'snow' | 'desert'>('grassland')
 
   const generateImage = async () => {
     setLoading(true)
@@ -397,11 +397,12 @@ export default function App() {
                       <Select
                         value={biome}
                         label="Biome"
-                        onChange={e => setBiome(e.target.value as 'grassland' | 'snow')}
+                        onChange={e => setBiome(e.target.value as 'grassland' | 'snow' | 'desert')}
                         sx={{ fontFamily: '"Crimson Text", Georgia, serif' }}
                       >
                         <MenuItem value="grassland">Grassland</MenuItem>
                         <MenuItem value="snow">Tundra</MenuItem>
+                        <MenuItem value="desert">Desert</MenuItem>
                       </Select>
                     </FormControl>
                   </Stack>

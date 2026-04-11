@@ -32,7 +32,7 @@ class seed_request(BaseModel):
     river_enabled:bool = True
     building_enabled:bool = True
     road_enabled:bool = True
-    biome: Literal["grassland", "snow"] = "grassland"
+    biome: Literal["grassland", "snow", "desert"] = "grassland"
 
 @app.get("/hello")
 def hello_world():
@@ -66,6 +66,9 @@ def generate_map(request:seed_request):
     if input_biome == "snow":
         texture_folder = 'assets/ground_textures_snow'
         foliage_folder = 'assets/foliage_and_objects_snow'
+    elif input_biome == "desert":
+        texture_folder = 'assets/ground_textures_desert'
+        foliage_folder = 'assets/foliage_and_objects'
     else:
         texture_folder = 'assets/ground_textures'
         foliage_folder = 'assets/foliage_and_objects'
