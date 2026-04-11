@@ -68,7 +68,7 @@ def generate_map(request:seed_request):
         foliage_folder = 'assets/foliage_and_objects_snow'
     elif input_biome == "desert":
         texture_folder = 'assets/ground_textures_desert'
-        foliage_folder = 'assets/foliage_and_objects'
+        foliage_folder = 'assets/foliage_and_objects_desert'
     else:
         texture_folder = 'assets/ground_textures'
         foliage_folder = 'assets/foliage_and_objects'
