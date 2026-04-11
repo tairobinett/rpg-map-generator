@@ -30,8 +30,32 @@ class Building:
     # the wall segment for each door is removed from wall_segments.
 
 
+BIOME_COLORS = {
+    "grassland": {
+        TerrainType.WATER:    (65, 105, 225),
+        TerrainType.SAND:     (238, 214, 175),
+        TerrainType.GRASS:    (107, 142, 35),
+        TerrainType.FOREST:   (34, 139, 34),
+        TerrainType.HILL:     (139, 90, 43),
+        TerrainType.MOUNTAIN: (105, 105, 105),
+        TerrainType.FLOOR:    (180, 160, 130),
+    },
+    "snow": {
+        TerrainType.WATER:    (100, 149, 237),
+        TerrainType.SAND:     (200, 220, 235),
+        TerrainType.GRASS:    (230, 240, 250),
+        TerrainType.FOREST:   (180, 210, 230),
+        TerrainType.HILL:     (160, 180, 200),
+        TerrainType.MOUNTAIN: (210, 215, 220),
+        TerrainType.FLOOR:    (200, 195, 190),
+    },
+}
+
+
 class TerrainGenerator:
-    def __init__(self, width, height, seed, tile_size=128, texture_folder=None, foliage_folder=None, building_folder=None):
+    def __init__(self, width, height, seed, tile_size=128,
+                 texture_folder=None, foliage_folder=None, building_folder=None,
+                 biome: str = "grassland"):
         self.width = width
         self.height = height
         self.seed = seed
@@ -39,6 +63,9 @@ class TerrainGenerator:
         self.texture_folder = texture_folder
         self.foliage_folder = foliage_folder
         self.building_folder = building_folder
+        self.biome = biome if biome in BIOME_COLORS else "grassland"
+        self.colors = BIOME_COLORS[self.biome]
+
         self.foliage_tiles = {}   # dict: subdir_name -> set of (row, col) tiles
         self.foliage_assets = {}  # dict: subdir_name -> list of filenames in that subdir
         self.building: Optional[Building] = None
@@ -486,19 +513,13 @@ class TerrainGenerator:
         img_width = self.width * self.tile_size
         img_height = self.height * self.tile_size
 
-        colors = {
-            TerrainType.WATER:      (65, 105, 225),
-            TerrainType.SAND:       (238, 214, 175),
-            TerrainType.GRASS:      (107, 142, 35),
-            TerrainType.FOREST:     (34, 139, 34),
-            TerrainType.HILL:       (139, 90, 43),
-            TerrainType.MOUNTAIN:   (105, 105, 105),
-            TerrainType.FLOOR:      (180, 160, 130),
-        }
+        colors = self.colors
 
         # Render all tiles as grass first
         color_array = np.zeros((img_height, img_width, 3), dtype=np.uint8)
         for terrain_type, color in colors.items():
+            if terrain_type == TerrainType.SAND:
+                continue
             mask = (self.terrain_grid == terrain_type)
             rows, cols = np.where(mask)
             for row, col in zip(rows, cols):
@@ -578,12 +599,12 @@ class TerrainGenerator:
             rows, cols = np.where(floor_mask)
             for row, col in zip(rows, cols):
                 px, py = col * self.tile_size, row * self.tile_size
-                texture_tile = self.draw_tile(None, px, py, (180, 160, 130), TerrainType.FLOOR, tile_x=col, tile_y=row)
+                texture_tile = self.draw_tile(None, px, py, colors[TerrainType.FLOOR], TerrainType.FLOOR, tile_x=col, tile_y=row)
                 if texture_tile:
                     image.paste(texture_tile, (px, py))
                 else:
                     draw = ImageDraw.Draw(image)
-                    draw.rectangle([px, py, px + self.tile_size, py + self.tile_size], fill=(180, 160, 130))
+                    draw.rectangle([px, py, px + self.tile_size, py + self.tile_size], fill=colors[TerrainType.FLOOR])
 
         image = self._render_building_walls(image)
 
@@ -881,7 +902,7 @@ class TerrainGenerator:
 
             bw, bh = bridge_oriented.size
 
-            # scale short axis to road diametser
+            # scale short axis to road diameter
             if orientation == 'H':
                 scale = road_diameter / bh
             else:
@@ -933,8 +954,8 @@ class TerrainGenerator:
         img_w = self.width * ts
         img_h = self.height * ts
 
-        # Render shore layer beneath water
-        shore_color = (238, 214, 175)
+        shore_color = colors.get(TerrainType.SAND, (238, 214, 175))
+
         if hasattr(self, 'river_spline_points') and hasattr(self, 'river_radius_px'):
             shore_radius_px = self.river_radius_px * 1.3  # * 1.0 = river size, want it wider than river
             shore_mask = self._rasterize_river_spline(
@@ -948,7 +969,8 @@ class TerrainGenerator:
                     for tx in range(0, img_w, sand_tex.width):
                         shore_layer.paste(sand_tex, (tx, ty))
             else:
-                shore_layer.paste(shore_color, [0, 0, img_w, img_h])
+                draw = ImageDraw.Draw(shore_layer)
+                draw.rectangle([0, 0, img_w, img_h], fill=shore_color)
 
             shore_mask_img = Image.fromarray((shore_mask * 255).astype(np.uint8), 'L')
             result = base_image.copy()
@@ -956,26 +978,25 @@ class TerrainGenerator:
             base_image = result
 
         water_layer = Image.new('RGB', (img_w, img_h))
+        water_color = colors[TerrainType.WATER]
         if TerrainType.WATER in self.textures:
             water_mask_tiles = (self.terrain_grid == TerrainType.WATER)
             wrows, wcols = np.where(water_mask_tiles)
             for row, col in zip(wrows, wcols):
                 px, py = col * ts, row * ts
-                tile = self.draw_tile(None, px, py, colors[TerrainType.WATER], TerrainType.WATER, tile_x=col, tile_y=row)
+                tile = self.draw_tile(None, px, py, water_color, TerrainType.WATER, tile_x=col, tile_y=row)
                 if tile:
                     water_layer.paste(tile, (px, py))
                 else:
                     draw = ImageDraw.Draw(water_layer)
-                    draw.rectangle([px, py, px+ts, py+ts], fill=colors[TerrainType.WATER])
+                    draw.rectangle([px, py, px+ts, py+ts], fill=water_color)
         else:
-            # Flat color fallback
-            wc = colors[TerrainType.WATER]
             draw = ImageDraw.Draw(water_layer)
             water_mask_tiles = (self.terrain_grid == TerrainType.WATER)
             wrows, wcols = np.where(water_mask_tiles)
             for row, col in zip(wrows, wcols):
                 px, py = col * ts, row * ts
-                draw.rectangle([px, py, px+ts, py+ts], fill=wc)
+                draw.rectangle([px, py, px+ts, py+ts], fill=water_color)
 
         # river_pixel_mask is a boolean array at pixel resolution (img_h x img_w)
         # Use as alpha channel to composite water over base
@@ -1039,7 +1060,8 @@ class TerrainGenerator:
 
             return texture_tile
         else:
-            draw.rectangle([x, y, x + size, y + size], fill=(base_color))
+            if draw:
+                draw.rectangle([x, y, x + size, y + size], fill=(base_color))
             return None
 
     def draw_grid(self, draw, img_width, img_height):
@@ -1077,8 +1099,6 @@ class TerrainGenerator:
         end_px   = wall_point_px(choose_end_wall)
 
         # Generate 2-3 river waypoints on map
-        # Divide the map into segments, pick one point per segment
-        # River flows naturally between points without looping back
         num_waypoints = random.randint(2, 3)
         interior_pts = []
         padding = ts * 2
@@ -1140,34 +1160,26 @@ class TerrainGenerator:
             bld_y0 = min(all_rows) * ts - clearance
             bld_y1 = max(all_rows) * ts + clearance
 
-            # Choose the map edge the road arrives from.
-            # Prefer the edge that is directly "behind" the entrance so the
-            # approach segment is the short perpendicular one and the long
-            # segment runs parallel past the building's side.
             approach = {
-                'N': 1,   # entrance faces north: come from top edge
-                'S': 3,   # entrance faces south: come from bottom edge
-                'W': 0,   # entrance faces west: come from left edge
-                'E': 2,   # entrance faces east: come from right edge
+                'N': 1,
+                'S': 3,
+                'W': 0,
+                'E': 2,
             }[side]
 
-            # Start point on that map edge, aligned to the entrance on the
-            # perpendicular axis so the first segment is perfectly straight.
-            if approach == 0:   # left edge  – road runs horizontally first
+            if approach == 0:
                 start_px = (0, ey)
-                # Corner: same Y as entrance, X just left of building bbox
                 corner_px = (bld_x0, ey)
-            elif approach == 2: # right edge
+            elif approach == 2:
                 start_px = (img_w, ey)
                 corner_px = (bld_x1, ey)
-            elif approach == 1: # top edge
+            elif approach == 1:
                 start_px = (ex, 0)
                 corner_px = (ex, bld_y0)
-            else:               # bottom edge
+            else:
                 start_px = (ex, img_h)
                 corner_px = (ex, bld_y1)
 
-            # If start and corner line up with the entrance, drop the corner to keep it a single segment.
             if corner_px == entrance_px or corner_px == start_px:
                 px_points = [start_px, entrance_px]
             else:
@@ -1175,7 +1187,6 @@ class TerrainGenerator:
 
         else:
             choose_start_wall = road_rng.randint(0, 3)
-            # Pick opposite wall for a straight crossing
             choose_end_wall = (choose_start_wall + 2) % 4
 
             def wall_point_px(wall, coord):
@@ -1184,24 +1195,22 @@ class TerrainGenerator:
                 elif wall == 2: return (img_w,  coord)
                 else:           return (coord,  img_h)
 
-            if choose_start_wall in (0, 2): # left/right – horizontal road
+            if choose_start_wall in (0, 2):
                 y = road_rng.randint(ts, img_h - ts)
                 start_px = wall_point_px(choose_start_wall, y)
                 end_px   = wall_point_px(choose_end_wall,   y)
-            else: # top/bottom – vertical road
+            else:
                 x = road_rng.randint(ts, img_w - ts)
                 start_px = wall_point_px(choose_start_wall, x)
                 end_px   = wall_point_px(choose_end_wall,   x)
 
             px_points = [start_px, end_px]
 
-        # store for renderer
         self.road_spline_points = px_points
         self.road_radius_px = road_half_w
 
         pixel_mask = self._rasterize_straight_road(px_points, road_half_w, img_w, img_h)
 
-        # Detect where road crosses the river and store crossing metadata for rendering
         self.bridge_crossings = self._compute_bridge_crossings(px_points, pixel_mask, road_half_w)
 
         tiles: Set[Tuple[int, int]] = set()

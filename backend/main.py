@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 from io import BytesIO
 from pydantic import BaseModel
 import hashlib
+from typing import Literal
 
 
 app = FastAPI()
@@ -12,7 +13,7 @@ app = FastAPI()
 # Allow your React app to make requests
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://34.24.123.156:5173"],  # React default port
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://35.231.6.4:5173"],  # React default port
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -31,6 +32,7 @@ class seed_request(BaseModel):
     river_enabled:bool = True
     building_enabled:bool = True
     road_enabled:bool = True
+    biome: Literal["grassland", "snow"] = "grassland"
 
 @app.get("/hello")
 def hello_world():
@@ -51,14 +53,33 @@ def generate_map(request:seed_request):
         input_river_enabled = bool(request.river_enabled)
         input_building_enabled = bool(request.building_enabled)
         input_road_enabled = bool(request.road_enabled)
+        input_biome = str(request.biome)
         print(f"input_river_width_int value: {input_river_width_int}")
+        print(f"biome: {input_biome}")
     except ValueError:
         print("Invalid input.")
         exit()
 
     input_seed_int = int(hashlib.md5(input_seed.encode()).hexdigest(), 16) % 2**32
 
-    generator = tg.TerrainGenerator(width=input_width_int, height=input_height_int, seed=input_seed_int, tile_size=128, texture_folder='assets/ground_textures', foliage_folder='assets/foliage_and_objects', building_folder='assets/buildings')
+    # Select asset folders based on biome
+    if input_biome == "snow":
+        texture_folder = 'assets/ground_textures_snow'
+        foliage_folder = 'assets/foliage_and_objects_snow'
+    else:
+        texture_folder = 'assets/ground_textures'
+        foliage_folder = 'assets/foliage_and_objects'
+
+    generator = tg.TerrainGenerator(
+        width=input_width_int,
+        height=input_height_int,
+        seed=input_seed_int,
+        tile_size=128,
+        texture_folder=texture_folder,
+        foliage_folder=foliage_folder,
+        building_folder='assets/buildings',
+        biome=input_biome,
+    )
     
     print("Generating terrain...")
     foliage_coverage = [input_flower_coverage_float, input_rock_coverage_float, input_bush_coverage_float]

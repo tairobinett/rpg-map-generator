@@ -16,6 +16,10 @@ import {
   Tooltip,
   IconButton,
   Collapse,
+  Select,
+  MenuItem,
+  InputLabel,
+  FormControl,
   alpha,
 } from '@mui/material'
 import { createTheme, ThemeProvider } from '@mui/material/styles'
@@ -240,6 +244,7 @@ export default function App() {
   const [river_enabled, setRiverEnabled] = useState(true)
   const [building_enabled, setBuildingEnabled] = useState(true)
   const [road_enabled, setRoadEnabled] = useState(true)
+  const [biome, setBiome] = useState<'grassland' | 'snow'>('grassland')
 
   const generateImage = async () => {
     setLoading(true)
@@ -260,6 +265,7 @@ export default function App() {
           river_enabled,
           building_enabled,
           road_enabled,
+          biome,
         }),
       })
       const blob = await response.blob()
@@ -385,6 +391,19 @@ export default function App() {
                       }
                       label="Show Grid Overlay"
                     />
+
+                    <FormControl size="small" fullWidth>
+                      <InputLabel sx={{ fontFamily: '"Crimson Text", Georgia, serif' }}>Biome</InputLabel>
+                      <Select
+                        value={biome}
+                        label="Biome"
+                        onChange={e => setBiome(e.target.value as 'grassland' | 'snow')}
+                        sx={{ fontFamily: '"Crimson Text", Georgia, serif' }}
+                      >
+                        <MenuItem value="grassland">Grassland</MenuItem>
+                        <MenuItem value="snow">Tundra</MenuItem>
+                      </Select>
+                    </FormControl>
                   </Stack>
                 </Paper>
 
