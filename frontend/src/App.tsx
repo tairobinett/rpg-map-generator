@@ -315,7 +315,7 @@ export default function App() {
                 mb: 0.5,
               }}
             >
-              RPG Map Generator
+              PandaMaps - an RPG Map Generator
             </Typography>
           </Box>
 
