@@ -281,23 +281,19 @@ export default function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      {/* Parchment background texture */}
       <Box
         sx={{
           minHeight: '100vh',
           background: `
-            radial-gradient(ellipse at 20% 20%, rgba(139,109,56,0.08) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 80%, rgba(107,158,107,0.06) 0%, transparent 50%),
             #1a1a14
           `,
           py: 4,
         }}
       >
-        {/* Google Fonts */}
         <style>{`@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');`}</style>
 
         <Container maxWidth="xl">
-          {/* Header */}
+          {/* header */}
           <Box sx={{ textAlign: 'center', mb: 5 }}>
             <Stack direction="row" justifyContent="center" alignItems="center" spacing={2} sx={{ mb: 1 }}>
               <Box sx={{ color: 'primary.main', opacity: 0.6 }}>✦</Box>
@@ -320,11 +316,11 @@ export default function App() {
           </Box>
 
           <Grid container spacing={3}>
-            {/* LEFT PANEL — Controls */}
+            {/* left panel - controls */}
             <Grid size={{ xs: 12, lg: 4 }}>
               <Stack spacing={2.5}>
 
-                {/* Map Settings */}
+                {/* map settings */}
                 <Paper
                   variant="outlined"
                   sx={{
@@ -408,7 +404,7 @@ export default function App() {
                   </Stack>
                 </Paper>
 
-                {/* Features */}
+                {/* optional map features */}
                 <Paper
                   variant="outlined"
                   sx={{ p: 3, border: '1px solid', borderColor: 'divider', background: alpha('#252520', 0.8) }}
@@ -457,7 +453,7 @@ export default function App() {
                   </FeatureRow>
                 </Paper>
 
-                {/* Foliage */}
+                {/* foliage and objects */}
                 <Paper
                   variant="outlined"
                   sx={{ p: 3, border: '1px solid', borderColor: 'divider', background: alpha('#252520', 0.8) }}
@@ -483,7 +479,7 @@ export default function App() {
                   />
                 </Paper>
 
-                {/* Generate Button */}
+                {/* generate button */}
                 <Button
                   variant="contained"
                   size="large"
@@ -512,13 +508,13 @@ export default function App() {
                     },
                   }}
                 >
-                  {loading ? 'Generating Map…' : 'Generate Map'}
+                  {loading ? 'Generating Map...' : 'Generate Map'}
                 </Button>
 
               </Stack>
             </Grid>
 
-            {/* RIGHT PANEL — Map Output */}
+            {/* right panel - map output */}
             <Grid size={{ xs: 12, lg: 8 }}>
               <Paper
                 variant="outlined"
@@ -555,7 +551,7 @@ export default function App() {
 
                 {imageURL && !loading && (
                   <Box sx={{ width: '100%', position: 'relative' }}>
-                    {/* Toolbar */}
+                    {/* toolbar */}
                     <Box
                       sx={{
                         px: 2,
@@ -602,7 +598,7 @@ export default function App() {
                 )}
               </Paper>
 
-              {/* Attribution */}
+              {/* attribution */}
               <Typography
                 variant="caption"
                 sx={{ display: 'block', textAlign: 'center', mt: 1.5, color: 'text.secondary', fontStyle: 'italic' }}
