@@ -246,6 +246,13 @@ export default function App() {
   const [road_enabled, setRoadEnabled] = useState(true)
   const [biome, setBiome] = useState<'grassland' | 'snow' | 'desert'>('grassland')
 
+  const foliageLabels: Record<'grassland' | 'snow' | 'desert', [string, string, string]> = {
+    grassland: ['Flowers', 'Rocks', 'Bushes'],
+    snow:      ['Snowdrifts', 'Rocks', 'Bushes'],
+    desert:    ['Bones', 'Rocks', 'Cacti'],
+  }
+  const [foliageLabel1, foliageLabel2, foliageLabel3] = foliageLabels[biome]
+
   const generateImage = async () => {
     setLoading(true)
     try {
@@ -461,19 +468,19 @@ export default function App() {
                   <SectionHeader icon={<ParkIcon fontSize="small" />} title="Foliage & Objects" />
 
                   <CoverageSlider
-                    label="Flowers"
+                    label={foliageLabel1}
                     coverage={flower_coverage}
                     onCoverageChange={setFlowerCoverage}
                   />
                   <Divider sx={{ my: 2, borderColor: 'divider' }} />
                   <CoverageSlider
-                    label="Rocks"
+                    label={foliageLabel2}
                     coverage={rock_coverage}
                     onCoverageChange={setRockCoverage}
                   />
                   <Divider sx={{ my: 2, borderColor: 'divider' }} />
                   <CoverageSlider
-                    label="Bushes"
+                    label={foliageLabel3}
                     coverage={bush_coverage}
                     onCoverageChange={setBushCoverage}
                   />
