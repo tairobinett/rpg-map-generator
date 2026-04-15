@@ -276,7 +276,7 @@ export default function App() {
   const generateImage = async () => {
     setLoading(true)
     try {
-      const response = await fetch('http://127.0.0.1:8000/generate_map', {
+      const response = await fetch('http://34.138.246.196:8000/generate_map', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -388,7 +388,7 @@ export default function App() {
                           onBlur={handleBlur('width', 5, 60, setWidth)}
                           size="small"
                           fullWidth
-                          slotProps={{ htmlInput: { min: 5, max: 60, step: 1 } }}
+                          //slotProps={{ htmlInput: { min: 5, max: 60, step: 1 } }}
                         />
                       </Grid>
                       <Grid size={6}>
@@ -400,7 +400,7 @@ export default function App() {
                           onBlur={handleBlur('height', 5, 60, setHeight)}
                           size="small"
                           fullWidth
-                          slotProps={{ htmlInput: { min: 5, max: 60, step: 1 } }}
+                          //slotProps={{ htmlInput: { min: 5, max: 60, step: 1 } }}
                         />
                       </Grid>
                     </Grid>
@@ -453,7 +453,7 @@ export default function App() {
                       onChange={handleChange('river_width')}
                       onBlur={handleBlur('river_width', 1, 5, setRiverWidth)}
                       size="small"
-                      slotProps={{ htmlInput: { min: 1, max: 5, step: 1 } }}
+                      //slotProps={{ htmlInput: { min: 1, max: 5, step: 1 } }}
                       sx={{ width: '100%', maxWidth: 160 }}
                     />
                   </FeatureRow>
@@ -478,7 +478,7 @@ export default function App() {
                       onChange={handleChange('road_width')}
                       onBlur={handleBlur('road_width', 1, 5, setRoadWidth)}
                       size="small"
-                      slotProps={{ htmlInput: { min: 1, max: 5, step: 1 } }}
+                      //slotProps={{ htmlInput: { min: 1, max: 5, step: 1 } }}
                       sx={{ width: '100%', maxWidth: 160 }}
                     />
                   </FeatureRow>
