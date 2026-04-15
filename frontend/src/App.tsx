@@ -233,10 +233,15 @@ export default function App() {
   const [imageURL, setImageURL] = useState('')
   const [loading, setLoading] = useState(false)
   const [seed, setSeed] = useState('')
-  const [height, setHeight] = useState('15')
-  const [width, setWidth] = useState('15')
-  const [river_width, setRiverWidth] = useState('1')
-  const [road_width, setRoadWidth] = useState('1')
+  const [height, setHeight] = useState(15)
+  const [width, setWidth] = useState(15)
+  const [river_width, setRiverWidth] = useState(1)
+  const [road_width, setRoadWidth] = useState(1)
+
+  const clampedInt = (value: string, min: number, max: number, setter: (n: number) => void) => {
+    const parsed = parseInt(value, 10)
+    if (!isNaN(parsed)) setter(Math.min(max, Math.max(min, parsed)))
+  }
   const [flower_coverage, setFlowerCoverage] = useState(50)
   const [rock_coverage, setRockCoverage] = useState(50)
   const [bush_coverage, setBushCoverage] = useState(50)
@@ -364,10 +369,10 @@ export default function App() {
                           label="Width"
                           type="number"
                           value={width}
-                          onChange={e => setWidth(e.target.value)}
+                          onChange={e => clampedInt(e.target.value, 5, 60, setWidth)}
                           size="small"
                           fullWidth
-                          slotProps={{ htmlInput: { min: 5, max: 50 } }}
+                          slotProps={{ htmlInput: { min: 5, max: 60, step: 1 } }}
                         />
                       </Grid>
                       <Grid size={6}>
@@ -375,10 +380,10 @@ export default function App() {
                           label="Height"
                           type="number"
                           value={height}
-                          onChange={e => setHeight(e.target.value)}
+                          onChange={e => clampedInt(e.target.value, 5, 60, setHeight)}
                           size="small"
                           fullWidth
-                          slotProps={{ htmlInput: { min: 5, max: 50 } }}
+                          slotProps={{ htmlInput: { min: 5, max: 60, step: 1 } }}
                         />
                       </Grid>
                     </Grid>
@@ -428,9 +433,9 @@ export default function App() {
                       label="River Width"
                       type="number"
                       value={river_width}
-                      onChange={e => setRiverWidth(e.target.value)}
+                      onChange={e => clampedInt(e.target.value, 1, 5, setRiverWidth)}
                       size="small"
-                      slotProps={{ htmlInput: { min: 1, max: 5 } }}
+                      slotProps={{ htmlInput: { min: 1, max: 5, step: 1 } }}
                       sx={{ width: '100%', maxWidth: 160 }}
                     />
                   </FeatureRow>
@@ -452,9 +457,9 @@ export default function App() {
                       label="Road Width"
                       type="number"
                       value={road_width}
-                      onChange={e => setRoadWidth(e.target.value)}
+                      onChange={e => clampedInt(e.target.value, 1, 5, setRoadWidth)}
                       size="small"
-                      slotProps={{ htmlInput: { min: 1, max: 5 } }}
+                      slotProps={{ htmlInput: { min: 1, max: 5, step: 1 } }}
                       sx={{ width: '100%', maxWidth: 160 }}
                     />
                   </FeatureRow>

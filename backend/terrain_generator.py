@@ -288,8 +288,13 @@ class TerrainGenerator:
         for _ in range(200):
             w = bld_rng.randint(min_room_size, max_room_size)
             h = bld_rng.randint(min_room_size, max_room_size)
-            col = bld_rng.randint(margin, self.width  - w - margin)
-            row = bld_rng.randint(margin, self.height - h - margin)
+            col_lo, col_hi = margin, self.width  - w - margin
+            row_lo, row_hi = margin, self.height - h - margin
+            # Map is too small to fit even a single room with margins
+            if col_lo > col_hi or row_lo > row_hi:
+                continue
+            col = bld_rng.randint(col_lo, col_hi)
+            row = bld_rng.randint(row_lo, row_hi)
             if not self._room_conflicts(col, row, w, h, rooms, forbidden):
                 rooms.append((col, row, w, h))
                 break
@@ -369,10 +374,16 @@ class TerrainGenerator:
                     # New room shares a horizontal wall: same width axis
                     nw = rng.randint(min_size, max_size)
                     nh = rng.randint(min_size, max_size)
-                    # Overlap on the shared wall axis: at least min_size tiles
-                    overlap = rng.randint(min_size, max(min_size, min(pw, nw)))
+                    # Overlap on the shared wall axis: at least 1 tile, capped by narrower room
+                    overlap_max = max(1, min(pw, nw))
+                    overlap_min = min(1, overlap_max)
+                    overlap = rng.randint(overlap_min, overlap_max)
                     # Align: shared wall tiles start at nc, nc+overlap-1
-                    nc = rng.randint(pc - nw + overlap, pc + pw - overlap)
+                    nc_lo = pc - nw + overlap
+                    nc_hi = pc + pw - overlap
+                    if nc_lo > nc_hi:
+                        continue
+                    nc = rng.randint(nc_lo, nc_hi)
                     if side == 'N':
                         # new room is above
                         nr = pr - nh
@@ -382,8 +393,14 @@ class TerrainGenerator:
                 else: # E/W
                     nw = rng.randint(min_size, max_size)
                     nh = rng.randint(min_size, max_size)
-                    overlap = rng.randint(min_size, max(min_size, min(ph, nh)))
-                    nr = rng.randint(pr - nh + overlap, pr + ph - overlap)
+                    overlap_max = max(1, min(ph, nh))
+                    overlap_min = min(1, overlap_max)
+                    overlap = rng.randint(overlap_min, overlap_max)
+                    nr_lo = pr - nh + overlap
+                    nr_hi = pr + ph - overlap
+                    if nr_lo > nr_hi:
+                        continue
+                    nr = rng.randint(nr_lo, nr_hi)
                     if side == 'W':
                         nc = pc - nw
                     else:
