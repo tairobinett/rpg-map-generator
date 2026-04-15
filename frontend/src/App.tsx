@@ -238,9 +238,24 @@ export default function App() {
   const [river_width, setRiverWidth] = useState(1)
   const [road_width, setRoadWidth] = useState(1)
 
-  const clampedInt = (value: string, min: number, max: number, setter: (n: number) => void) => {
-    const parsed = parseInt(value, 10)
-    if (!isNaN(parsed)) setter(Math.min(max, Math.max(min, parsed)))
+  const [rawValues, setRawValues] = useState({
+    height: '15',
+    width: '15',
+    river_width: '1',
+    road_width: '1',
+  })
+
+  type RawKey = keyof typeof rawValues
+
+  const handleChange = (key: RawKey) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    setRawValues(prev => ({ ...prev, [key]: e.target.value }))
+  }
+
+  const handleBlur = (key: RawKey, min: number, max: number, setter: (n: number) => void) => () => {
+    const parsed = parseInt(rawValues[key], 10)
+    const clamped = isNaN(parsed) ? min : Math.min(max, Math.max(min, parsed))
+    setter(clamped)
+    setRawValues(prev => ({ ...prev, [key]: String(clamped) }))
   }
   const [flower_coverage, setFlowerCoverage] = useState(50)
   const [rock_coverage, setRockCoverage] = useState(50)
@@ -368,8 +383,9 @@ export default function App() {
                         <TextField
                           label="Width"
                           type="number"
-                          value={width}
-                          onChange={e => clampedInt(e.target.value, 5, 60, setWidth)}
+                          value={rawValues.width}
+                          onChange={handleChange('width')}
+                          onBlur={handleBlur('width', 5, 60, setWidth)}
                           size="small"
                           fullWidth
                           slotProps={{ htmlInput: { min: 5, max: 60, step: 1 } }}
@@ -379,8 +395,9 @@ export default function App() {
                         <TextField
                           label="Height"
                           type="number"
-                          value={height}
-                          onChange={e => clampedInt(e.target.value, 5, 60, setHeight)}
+                          value={rawValues.height}
+                          onChange={handleChange('height')}
+                          onBlur={handleBlur('height', 5, 60, setHeight)}
                           size="small"
                           fullWidth
                           slotProps={{ htmlInput: { min: 5, max: 60, step: 1 } }}
@@ -432,8 +449,9 @@ export default function App() {
                     <TextField
                       label="River Width"
                       type="number"
-                      value={river_width}
-                      onChange={e => clampedInt(e.target.value, 1, 5, setRiverWidth)}
+                      value={rawValues.river_width}
+                      onChange={handleChange('river_width')}
+                      onBlur={handleBlur('river_width', 1, 5, setRiverWidth)}
                       size="small"
                       slotProps={{ htmlInput: { min: 1, max: 5, step: 1 } }}
                       sx={{ width: '100%', maxWidth: 160 }}
@@ -456,8 +474,9 @@ export default function App() {
                     <TextField
                       label="Road Width"
                       type="number"
-                      value={road_width}
-                      onChange={e => clampedInt(e.target.value, 1, 5, setRoadWidth)}
+                      value={rawValues.road_width}
+                      onChange={handleChange('road_width')}
+                      onBlur={handleBlur('road_width', 1, 5, setRoadWidth)}
                       size="small"
                       slotProps={{ htmlInput: { min: 1, max: 5, step: 1 } }}
                       sx={{ width: '100%', maxWidth: 160 }}
