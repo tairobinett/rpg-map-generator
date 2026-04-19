@@ -247,8 +247,30 @@ export default function App() {
 
   type RawKey = keyof typeof rawValues
 
+  const setterMap: Record<RawKey, (n: number) => void> = {
+    height: setHeight,
+    width: setWidth,
+    river_width: setRiverWidth,
+    road_width: setRoadWidth,
+  }
+
+  const limitsMap: Record<RawKey, [number, number]> = {
+    height:      [5, 60],
+    width:       [5, 60],
+    river_width: [1, 5],
+    road_width:  [1, 5],
+  }
+
   const handleChange = (key: RawKey) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    setRawValues(prev => ({ ...prev, [key]: e.target.value }))
+    const raw = e.target.value
+    setRawValues(prev => ({ ...prev, [key]: raw }))
+    // Commit immediately so spinner clicks (which skip onBlur) still update state
+    const parsed = parseInt(raw, 10)
+    if (!isNaN(parsed)) {
+      const [min, max] = limitsMap[key]
+      const clamped = Math.min(max, Math.max(min, parsed))
+      setterMap[key](clamped)
+    }
   }
 
   const handleBlur = (key: RawKey, min: number, max: number, setter: (n: number) => void) => () => {
@@ -257,9 +279,9 @@ export default function App() {
     setter(clamped)
     setRawValues(prev => ({ ...prev, [key]: String(clamped) }))
   }
-  const [flower_coverage, setFlowerCoverage] = useState(50)
-  const [rock_coverage, setRockCoverage] = useState(50)
-  const [bush_coverage, setBushCoverage] = useState(50)
+  const [flower_coverage, setFlowerCoverage] = useState(25)
+  const [rock_coverage, setRockCoverage] = useState(25)
+  const [bush_coverage, setBushCoverage] = useState(25)
   const [grid_toggle, setGridToggle] = useState(true)
   const [river_enabled, setRiverEnabled] = useState(true)
   const [building_enabled, setBuildingEnabled] = useState(true)
@@ -388,7 +410,7 @@ export default function App() {
                           onBlur={handleBlur('width', 5, 60, setWidth)}
                           size="small"
                           fullWidth
-                          //slotProps={{ htmlInput: { min: 5, max: 60, step: 1 } }}
+                          slotProps={{ htmlInput: { min: 5, max: 60, step: 1 } }}
                         />
                       </Grid>
                       <Grid size={6}>
@@ -400,7 +422,7 @@ export default function App() {
                           onBlur={handleBlur('height', 5, 60, setHeight)}
                           size="small"
                           fullWidth
-                          //slotProps={{ htmlInput: { min: 5, max: 60, step: 1 } }}
+                          slotProps={{ htmlInput: { min: 5, max: 60, step: 1 } }}
                         />
                       </Grid>
                     </Grid>
@@ -453,7 +475,7 @@ export default function App() {
                       onChange={handleChange('river_width')}
                       onBlur={handleBlur('river_width', 1, 5, setRiverWidth)}
                       size="small"
-                      //slotProps={{ htmlInput: { min: 1, max: 5, step: 1 } }}
+                      slotProps={{ htmlInput: { min: 1, max: 5, step: 1 } }}
                       sx={{ width: '100%', maxWidth: 160 }}
                     />
                   </FeatureRow>
@@ -478,7 +500,7 @@ export default function App() {
                       onChange={handleChange('road_width')}
                       onBlur={handleBlur('road_width', 1, 5, setRoadWidth)}
                       size="small"
-                      //slotProps={{ htmlInput: { min: 1, max: 5, step: 1 } }}
+                      slotProps={{ htmlInput: { min: 1, max: 5, step: 1 } }}
                       sx={{ width: '100%', maxWidth: 160 }}
                     />
                   </FeatureRow>
@@ -634,7 +656,7 @@ export default function App() {
                 variant="caption"
                 sx={{ display: 'block', textAlign: 'center', mt: 1.5, color: 'text.secondary', fontStyle: 'italic' }}
               >
-                Tile textures by{' '}
+                Assets by{' '}
                 <Box component="a" href="https://2minutetabletop.com" sx={{ color: 'primary.main', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
                   2 Minute Tabletop
                 </Box>
@@ -642,6 +664,7 @@ export default function App() {
                 <Box component="a" href="https://creativecommons.org/licenses/by-nc/4.0/" sx={{ color: 'primary.main', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
                   CC BY-NC 4.0
                 </Box>
+                . Some assets have been modified from their original form.
               </Typography>
             </Grid>
           </Grid>
