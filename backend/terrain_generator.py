@@ -36,8 +36,6 @@ BIOME_COLORS = {
         TerrainType.SAND:     (238, 214, 175),
         TerrainType.GRASS:    (107, 142, 35),
         TerrainType.FOREST:   (34, 139, 34),
-        TerrainType.HILL:     (139, 90, 43),
-        TerrainType.MOUNTAIN: (105, 105, 105),
         TerrainType.FLOOR:    (180, 160, 130),
     },
     "snow": {
@@ -45,8 +43,6 @@ BIOME_COLORS = {
         TerrainType.SAND:     (200, 220, 235),
         TerrainType.GRASS:    (230, 240, 250),
         TerrainType.FOREST:   (180, 210, 230),
-        TerrainType.HILL:     (160, 180, 200),
-        TerrainType.MOUNTAIN: (210, 215, 220),
         TerrainType.FLOOR:    (200, 195, 190),
     },
     "desert": {
@@ -54,8 +50,6 @@ BIOME_COLORS = {
         TerrainType.SAND:     (210, 180, 110),
         TerrainType.GRASS:    (194, 162, 90),
         TerrainType.FOREST:   (160, 130, 60),
-        TerrainType.HILL:     (180, 140, 80),
-        TerrainType.MOUNTAIN: (150, 120, 80),
         TerrainType.FLOOR:    (190, 165, 115),
     },
 }
@@ -419,13 +413,6 @@ class TerrainGenerator:
     def _compute_wall_segments(
             self, interior: Set[Tuple[int,int]], tile_room: dict
     ) -> Set[Tuple[Tuple[int,int],Tuple[int,int]]]:
-        """
-        Return wall segments for:
-          - the outer boundary of the building (neighbour is outside)
-          - shared edges between two *different* rooms (room dividers)
-
-        Grid point (gx, gy) maps to pixel (gx * tile_size, gy * tile_size).
-        """
         # return wall segments for outer boundary of building and shared edges of different rooms
         walls: Set[Tuple[Tuple[int,int],Tuple[int,int]]] = set()
         for (row, col) in interior:
@@ -517,20 +504,6 @@ class TerrainGenerator:
                 doors.append((row, col, side))
 
         return doors
-
-
-    def noise_to_terrain(self, noise_map):
-        terrain = np.zeros_like(noise_map, dtype=int)
-
-        # Thresholds for different terrain types
-        terrain[noise_map < 0.3] = TerrainType.WATER
-        terrain[(noise_map >= 0.3) & (noise_map < 0.35)] = TerrainType.SAND
-        terrain[(noise_map >= 0.35) & (noise_map < 0.55)] = TerrainType.GRASS
-        terrain[(noise_map >= 0.55) & (noise_map < 0.7)] = TerrainType.FOREST
-        terrain[(noise_map >= 0.7) & (noise_map < 0.85)] = TerrainType.HILL
-        terrain[noise_map >= 0.85] = TerrainType.MOUNTAIN
-
-        return terrain
 
     def get_tiles_above_threshold(self, noise_map, threshold): 
         return np.argwhere(noise_map > threshold)
@@ -1249,7 +1222,6 @@ class TerrainGenerator:
         return pixel_mask, tiles
 
     def _rasterize_straight_road(self, px_points, half_width, img_w, img_h):
-        """Rasterise a sequence of straight (H/V) line segments into a bool mask."""
         mask_img = Image.new('L', (img_w, img_h), 0)
         draw = ImageDraw.Draw(mask_img)
         diameter = int(half_width * 2)
